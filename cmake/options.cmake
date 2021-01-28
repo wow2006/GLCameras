@@ -29,3 +29,8 @@ target_link_libraries(
   $<$<PLATFORM_ID:Linux>:stdc++fs>
 )
 
+target_compile_definitions(
+  options
+  INTERFACE
+  $<$<CXX_COMPILER_ID:MSVC>:WIN32_LEAN_AND_MEAN;NOMINMAX>
+)
