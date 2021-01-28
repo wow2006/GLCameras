@@ -1,0 +1,129 @@
+# depslib dependency file v1.0
+1461090244 source:d:\win\song\scripts\cpp\opengl\trackball\src\animutils.cpp
+	"animUtils.h"
+
+1461090244 d:\win\song\scripts\cpp\opengl\trackball\src\animutils.h
+	<cmath>
+	"Vectors.h"
+	"Quaternion.h"
+
+1461090244 d:\win\song\scripts\cpp\opengl\trackball\src\vectors.h
+	<cmath>
+	<iostream>
+
+1461090244 d:\win\song\scripts\cpp\opengl\trackball\src\quaternion.h
+	"Vectors.h"
+	"Matrices.h"
+	<cmath>
+	<iostream>
+
+1461090244 d:\win\song\scripts\cpp\opengl\trackball\src\matrices.h
+	<iostream>
+	<iomanip>
+	"Vectors.h"
+
+1461090244 source:d:\win\song\scripts\cpp\opengl\trackball\src\main.cpp
+	<GLUT/glut.h>
+	<GL/glut.h>
+	<cstdlib>
+	<iostream>
+	<sstream>
+	<string>
+	<iomanip>
+	<vector>
+	"Vectors.h"
+	"Matrices.h"
+	"Quaternion.h"
+	"Trackball.h"
+	"animUtils.h"
+
+1426371328 d:\win\song\scripts\cpp\opengl\trackball\src\freeglut\include\gl\glut.h
+	"freeglut_std.h"
+
+1426371328 d:\win\song\scripts\cpp\opengl\trackball\src\freeglut\include\gl\freeglut_std.h
+	<windows.h>
+	<EGL/egl.h>
+	<GLES/gl.h>
+	<GLES2/gl2.h>
+	<OpenGL/gl.h>
+	<OpenGL/glu.h>
+	<GL/gl.h>
+	<GL/glu.h>
+	<stdlib.h>
+
+1461090244 d:\win\song\scripts\cpp\opengl\trackball\src\trackball.h
+	"Vectors.h"
+
+1461090244 source:d:\win\song\scripts\cpp\opengl\trackball\src\matrices.cpp
+	<cmath>
+	<algorithm>
+	"Matrices.h"
+
+1461090244 source:d:\win\song\scripts\cpp\opengl\trackball\src\trackball.cpp
+	"Trackball.h"
+	<iostream>
+
+1461090244 source:c:\users\song\desktop\trackball\src\animutils.cpp
+	"animUtils.h"
+
+1461090244 c:\users\song\desktop\trackball\src\animutils.h
+	<cmath>
+	"Vectors.h"
+	"Quaternion.h"
+
+1461090244 c:\users\song\desktop\trackball\src\vectors.h
+	<cmath>
+	<iostream>
+
+1461090244 c:\users\song\desktop\trackball\src\quaternion.h
+	"Vectors.h"
+	"Matrices.h"
+	<cmath>
+	<iostream>
+
+1461090244 c:\users\song\desktop\trackball\src\matrices.h
+	<iostream>
+	<iomanip>
+	"Vectors.h"
+
+1461090244 source:c:\users\song\desktop\trackball\src\main.cpp
+	<GLUT/glut.h>
+	<GL/glut.h>
+	<cstdlib>
+	<iostream>
+	<sstream>
+	<string>
+	<iomanip>
+	<vector>
+	"Vectors.h"
+	"Matrices.h"
+	"Quaternion.h"
+	"Trackball.h"
+	"animUtils.h"
+
+1426371328 c:\users\song\desktop\trackball\src\freeglut\include\gl\glut.h
+	"freeglut_std.h"
+
+1426371328 c:\users\song\desktop\trackball\src\freeglut\include\gl\freeglut_std.h
+	<windows.h>
+	<EGL/egl.h>
+	<GLES/gl.h>
+	<GLES2/gl2.h>
+	<OpenGL/gl.h>
+	<OpenGL/glu.h>
+	<GL/gl.h>
+	<GL/glu.h>
+	<stdlib.h>
+
+1461090244 c:\users\song\desktop\trackball\src\trackball.h
+	"Vectors.h"
+
+1461090244 source:c:\users\song\desktop\trackball\src\matrices.cpp
+	<cmath>
+	<algorithm>
+	"Matrices.h"
+
+1461090244 source:c:\users\song\desktop\trackball\src\trackball.cpp
+	"Trackball.h"
+	<iostream>
+
