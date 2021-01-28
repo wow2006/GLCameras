@@ -20,6 +20,8 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
+#include <Tracy.hpp>
+
 #include <cmath>
 #include "camera.h"
 
@@ -31,25 +33,26 @@ const Vector3 Camera::WORLD_YAXIS(0.0f, 1.0f, 0.0f);
 const Vector3 Camera::WORLD_ZAXIS(0.0f, 0.0f, 1.0f);
 
 Camera::Camera() {
+    ZoneScoped; // NOLINT
     m_behavior = CAMERA_BEHAVIOR_FLIGHT;
-    
+
     m_fovx        = DEFAULT_FOVX;
     m_znear       = DEFAULT_ZNEAR;
     m_zfar        = DEFAULT_ZFAR;
     m_aspectRatio = 0.0f;
-    
+
     m_accumPitchDegrees = 0.0f;
-    
+
     m_eye.set(0.0f, 0.0f, 0.0f);
     m_xAxis.set(1.0f, 0.0f, 0.0f);
     m_yAxis.set(0.0f, 1.0f, 0.0f);
     m_zAxis.set(0.0f, 0.0f, 1.0f);
     m_viewDir.set(0.0f, 0.0f, -1.0f);
-    
+
     m_acceleration.set(0.0f, 0.0f, 0.0f);
     m_currentVelocity.set(0.0f, 0.0f, 0.0f);
     m_velocity.set(0.0f, 0.0f, 0.0f);
-    
+
     m_viewMatrix.identity();
     m_projMatrix.identity();
 }
@@ -60,11 +63,13 @@ Camera::~Camera()
 
 void Camera::lookAt(const Vector3 &target)
 {
+    ZoneScoped; // NOLINT
     lookAt(m_eye, target, m_yAxis);
 }
 
 void Camera::lookAt(const Vector3 &eye, const Vector3 &target, const Vector3 &up)
 {
+    ZoneScoped; // NOLINT
     m_eye = eye;
 
     m_zAxis = eye - target;
@@ -91,7 +96,7 @@ void Camera::lookAt(const Vector3 &eye, const Vector3 &target, const Vector3 &up
 
     m_viewMatrix[0][2] = m_zAxis.x;
     m_viewMatrix[1][2] = m_zAxis.y;
-    m_viewMatrix[2][2] = m_zAxis.z;    
+    m_viewMatrix[2][2] = m_zAxis.z;
     m_viewMatrix[3][2] = -Vector3::dot(m_zAxis, eye);
 
     // Extract the pitch angle from the view matrix.
@@ -100,6 +105,7 @@ void Camera::lookAt(const Vector3 &eye, const Vector3 &target, const Vector3 &up
 
 void Camera::move(float dx, float dy, float dz)
 {
+    ZoneScoped; // NOLINT
     // Moves the camera by dx world units to the left or right; dy
     // world units upwards or downwards; and dz world units forwards
     // or backwards.
@@ -120,16 +126,17 @@ void Camera::move(float dx, float dy, float dz)
     {
         forwards = m_viewDir;
     }
-    
+
     eye += m_xAxis * dx;
     eye += WORLD_YAXIS * dy;
     eye += forwards * dz;
-    
+
     setPosition(eye);
 }
 
 void Camera::move(const Vector3 &direction, const Vector3 &amount)
 {
+    ZoneScoped; // NOLINT
     // Moves the camera by the specified amount of world units in the specified
     // direction in world space.
 
@@ -142,6 +149,7 @@ void Camera::move(const Vector3 &direction, const Vector3 &amount)
 
 void Camera::perspective(float fovx, float aspect, float znear, float zfar)
 {
+    ZoneScoped; // NOLINT
     // Construct a projection matrix based on the horizontal field of view
     // 'fovx' rather than the more traditional vertical field of view 'fovy'.
 
@@ -179,6 +187,7 @@ void Camera::perspective(float fovx, float aspect, float znear, float zfar)
 
 void Camera::rotate(float headingDegrees, float pitchDegrees, float rollDegrees)
 {
+    ZoneScoped; // NOLINT
     // Rotates the camera based on its current behavior.
     // Note that not all behaviors support rolling.
 
@@ -198,6 +207,7 @@ void Camera::rotate(float headingDegrees, float pitchDegrees, float rollDegrees)
 
 void Camera::rotateFlight(float headingDegrees, float pitchDegrees, float rollDegrees)
 {
+    ZoneScoped; // NOLINT
     Matrix4 rotMtx;
 
     // Rotate camera's existing x and z axes about its existing y axis.
@@ -227,6 +237,7 @@ void Camera::rotateFlight(float headingDegrees, float pitchDegrees, float rollDe
 
 void Camera::rotateFirstPerson(float headingDegrees, float pitchDegrees)
 {
+    ZoneScoped; // NOLINT
     m_accumPitchDegrees += pitchDegrees;
 
     if (m_accumPitchDegrees > 90.0f)
@@ -262,16 +273,19 @@ void Camera::rotateFirstPerson(float headingDegrees, float pitchDegrees)
 
 void Camera::setAcceleration(float x, float y, float z)
 {
+    ZoneScoped; // NOLINT
     m_acceleration.set(x, y, z);
 }
 
 void Camera::setAcceleration(const Vector3 &acceleration)
 {
+    ZoneScoped; // NOLINT
     m_acceleration = acceleration;
 }
 
 void Camera::setBehavior(CameraBehavior newBehavior)
 {
+    ZoneScoped; // NOLINT
     if (m_behavior == CAMERA_BEHAVIOR_FLIGHT && newBehavior == CAMERA_BEHAVIOR_FIRST_PERSON)
     {
         // Moving from flight-simulator mode to first-person.
@@ -285,38 +299,45 @@ void Camera::setBehavior(CameraBehavior newBehavior)
 
 void Camera::setCurrentVelocity(float x, float y, float z)
 {
+    ZoneScoped; // NOLINT
     m_currentVelocity.set(x, y, z);
 }
 
 void Camera::setCurrentVelocity(const Vector3 &currentVelocity)
 {
+    ZoneScoped; // NOLINT
     m_currentVelocity = currentVelocity;
 }
 
 void Camera::setPosition(float x, float y, float z)
 {
+    ZoneScoped; // NOLINT
     m_eye.set(x, y, z);
     updateViewMatrix(false);
 }
 
 void Camera::setPosition(const Vector3 &position)
 {
+    ZoneScoped; // NOLINT
     m_eye = position;
     updateViewMatrix(false);
 }
 
 void Camera::setVelocity(float x, float y, float z)
 {
+    ZoneScoped; // NOLINT
     m_velocity.set(x, y, z);
 }
 
 void Camera::setVelocity(const Vector3 &velocity)
 {
+    ZoneScoped; // NOLINT
     m_velocity = velocity;
 }
 
 void Camera::updatePosition(const Vector3 &direction, float elapsedTimeSec)
 {
+    ZoneScoped; // NOLINT
     // Moves the camera using Newton's second law of motion. Unit mass is
     // assumed here to somewhat simplify the calculations. The direction vector
     // is in the range [-1,1].
@@ -359,6 +380,7 @@ void Camera::updatePosition(const Vector3 &direction, float elapsedTimeSec)
 
 void Camera::updateVelocity(const Vector3 &direction, float elapsedTimeSec)
 {
+    ZoneScoped; // NOLINT
     // Updates the camera's velocity based on the supplied movement direction
     // and the elapsed time (since this method was last called). The movement
     // direction is in the range [-1,1].
@@ -453,15 +475,16 @@ void Camera::updateVelocity(const Vector3 &direction, float elapsedTimeSec)
 
 void Camera::updateViewMatrix(bool orthogonalizeAxes)
 {
+    ZoneScoped; // NOLINT
     if (orthogonalizeAxes)
     {
         // Regenerate the camera's local axes to orthogonalize them.
-        
+
         m_zAxis.normalize();
-        
+
         m_yAxis = Vector3::cross(m_zAxis, m_xAxis);
         m_yAxis.normalize();
-        
+
         m_xAxis = Vector3::cross(m_yAxis, m_zAxis);
         m_xAxis.normalize();
 
@@ -480,9 +503,9 @@ void Camera::updateViewMatrix(bool orthogonalizeAxes)
     m_viewMatrix[2][1] = m_yAxis.z;
     m_viewMatrix[3][1] = -Vector3::dot(m_yAxis, m_eye);
 
-    m_viewMatrix[0][2] = m_zAxis.x;    
+    m_viewMatrix[0][2] = m_zAxis.x;
     m_viewMatrix[1][2] = m_zAxis.y;
-    m_viewMatrix[2][2] = m_zAxis.z;   
+    m_viewMatrix[2][2] = m_zAxis.z;
     m_viewMatrix[3][2] = -Vector3::dot(m_zAxis, m_eye);
 
     m_viewMatrix[0][3] = 0.0f;

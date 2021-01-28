@@ -20,6 +20,8 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
+#include <Tracy.hpp>
+
 #include <windows.h>
 #include "input.h"
 
@@ -29,12 +31,14 @@
 
 Keyboard &Keyboard::instance()
 {
+    ZoneScoped; // NOLINT
     static Keyboard theInstance;
     return theInstance;
 }
 
 Keyboard::Keyboard()
 {
+    ZoneScoped; // NOLINT
     m_lastChar = 0;
     m_pCurrKeyStates = m_keyStates[0];
     m_pPrevKeyStates = m_keyStates[1];
@@ -47,6 +51,7 @@ Keyboard::~Keyboard() {}
 
 void Keyboard::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    ZoneScoped; // NOLINT
     switch (msg)
     {
     case WM_CHAR:
@@ -60,6 +65,7 @@ void Keyboard::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void Keyboard::update()
 {
+    ZoneScoped; // NOLINT
     BYTE *pTempKeyStates = m_pPrevKeyStates;
 
     m_pPrevKeyStates = m_pCurrKeyStates;
@@ -84,11 +90,13 @@ const float Mouse::DEFAULT_WEIGHT_MODIFIER = 0.2f;
 
 Mouse &Mouse::instance()
 {
+    ZoneScoped; // NOLINT
     static Mouse theInstance;
     return theInstance;
 }
 
 Mouse::Mouse() {
+    ZoneScoped; // NOLINT
     m_hWnd = 0;
     m_cursorVisible = true;
     m_enableFiltering = true;
@@ -100,7 +108,7 @@ Mouse::Mouse() {
 
     m_xDistFromWindowCenter = 0.0f;
     m_yDistFromWindowCenter = 0.0f;
-       
+
     m_weightModifier = DEFAULT_WEIGHT_MODIFIER;
     m_historyBufferSize = HISTORY_BUFFER_SIZE;
 
@@ -110,10 +118,12 @@ Mouse::Mouse() {
 
 Mouse::~Mouse()
 {
+    ZoneScoped; // NOLINT
     detach();
 }
 
 bool Mouse::attach(HWND hWnd) {
+    ZoneScoped; // NOLINT
     if (!hWnd) {
         return false;
     }
@@ -123,7 +133,7 @@ bool Mouse::attach(HWND hWnd) {
     if (!m_cursorVisible) {
         hideCursor(true);
     }
-    
+
     m_filtered[0] = 0.0f;
     m_filtered[1] = 0.0f;
     m_pCurrButtonStates = m_buttonStates[0];
@@ -143,10 +153,11 @@ bool Mouse::attach(HWND hWnd) {
 
 void Mouse::detach()
 {
+    ZoneScoped; // NOLINT
     if (!m_cursorVisible)
     {
         hideCursor(false);
-        
+
         // Save the cursor visibility state in case attach() is called later.
         m_cursorVisible = false;
     }
@@ -156,6 +167,7 @@ void Mouse::detach()
 
 void Mouse::performMouseFiltering(float x, float y)
 {
+    ZoneScoped; // NOLINT
     // Filter the relative mouse movement based on a weighted sum of the mouse
     // movement from previous frames to ensure that the mouse movement this
     // frame is smooth.
@@ -195,6 +207,7 @@ void Mouse::performMouseFiltering(float x, float y)
 
 void Mouse::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    ZoneScoped; // NOLINT
     switch (msg)
     {
     default:
@@ -208,6 +221,7 @@ void Mouse::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void Mouse::hideCursor(bool hide)
 {
+    ZoneScoped; // NOLINT
     if (hide)
     {
         m_cursorVisible = false;
@@ -226,6 +240,7 @@ void Mouse::hideCursor(bool hide)
 
 void Mouse::moveTo(UINT x, UINT y)
 {
+    ZoneScoped; // NOLINT
     POINT ptScreen = {x, y};
 
     ClientToScreen(m_hWnd, &ptScreen);
@@ -237,6 +252,7 @@ void Mouse::moveTo(UINT x, UINT y)
 
 void Mouse::moveToWindowCenter()
 {
+    ZoneScoped; // NOLINT
     if (m_ptWindowCenterPos.x != 0 && m_ptWindowCenterPos.y != 0)
         moveTo(m_ptWindowCenterPos.x, m_ptWindowCenterPos.y);
     else
@@ -245,15 +261,18 @@ void Mouse::moveToWindowCenter()
 
 void Mouse::setWeightModifier(float weightModifier)
 {
+    ZoneScoped; // NOLINT
     m_weightModifier = weightModifier;
 }
 
 void Mouse::smoothMouse(bool smooth)
 {
+    ZoneScoped; // NOLINT
     m_enableFiltering = smooth;
 }
 
 void Mouse::update() {
+    ZoneScoped; // NOLINT
     // Update mouse buttons.
 
     bool *pTempMouseStates = m_pPrevButtonStates;

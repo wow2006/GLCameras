@@ -28,6 +28,8 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <Tracy.hpp>
+
 #if !defined(WIN32_LEAN_AND_MEAN)
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -171,6 +173,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 #endif
+    ZoneScoped; // NOLINT
 
     MSG msg = {0};
     WNDCLASSEX wcl = {0};
@@ -226,6 +229,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 {
                     WaitMessage();
                 }
+                FrameMark;
             }
         }
 
@@ -237,6 +241,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 }
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    ZoneScoped; // NOLINT
     switch (msg) {
     case WM_ACTIVATE:
         switch (wParam) {
@@ -278,6 +283,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void Cleanup()
 {
+    ZoneScoped; // NOLINT
     CleanupApp();
 
     if (g_hDC)
@@ -296,6 +302,7 @@ void Cleanup()
 
 void CleanupApp()
 {
+    ZoneScoped; // NOLINT
     g_font.destroy();
 
     if (g_floorColorMapTexture)
@@ -319,6 +326,7 @@ void CleanupApp()
 
 HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle)
 {
+    ZoneScoped; // NOLINT
     // Create a window that is centered on the desktop. It's exactly 1/4 the
     // size of the desktop. Don't allow it to be resized.
 
@@ -353,6 +361,7 @@ HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle)
 
 void EnableVerticalSync(bool enableVerticalSync)
 {
+    ZoneScoped; // NOLINT
     // WGL_EXT_swap_control.
 
     typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
@@ -370,6 +379,7 @@ void EnableVerticalSync(bool enableVerticalSync)
 
 bool ExtensionSupported(const char *pszExtensionName)
 {
+    ZoneScoped; // NOLINT
     static const char *pszGLExtensions = 0;
     static const char *pszWGLExtensions = 0;
 
@@ -401,6 +411,7 @@ bool ExtensionSupported(const char *pszExtensionName)
 
 float GetElapsedTimeInSeconds()
 {
+    ZoneScoped; // NOLINT
     // Returns the elapsed time (in seconds) since the last time this function
     // was called. This elaborate setup is to guard against large spikes in
     // the time returned by QueryPerformanceCounter().
@@ -451,6 +462,7 @@ float GetElapsedTimeInSeconds()
 }
 
 void GetMovementDirection(Vector3 &direction) {
+    ZoneScoped; // NOLINT
     static bool moveForwardsPressed  = false;
     static bool moveBackwardsPressed = false;
     static bool moveRightPressed     = false;
@@ -460,7 +472,7 @@ void GetMovementDirection(Vector3 &direction) {
 
     Vector3 velocity   = g_camera.getCurrentVelocity();
     Keyboard &keyboard = Keyboard::instance();
-    
+
     direction.set(0.0f, 0.0f, 0.0f);
 
     if (keyboard.keyDown(Keyboard::KEY_W)) {
@@ -506,7 +518,7 @@ void GetMovementDirection(Vector3 &direction) {
     } else {
         moveLeftPressed = false;
     }
-    
+
     if (keyboard.keyDown(Keyboard::KEY_E)) {
         if (!moveUpPressed) {
             moveUpPressed = true;
@@ -532,6 +544,7 @@ void GetMovementDirection(Vector3 &direction) {
 
 bool Init()
 {
+    ZoneScoped; // NOLINT
     try
     {
         InitGL();
@@ -556,6 +569,7 @@ bool Init()
 
 void InitApp()
 {
+    ZoneScoped; // NOLINT
     // Setup fonts.
 
     if (!g_font.create("Arial", 10, GLFont::BOLD))
@@ -589,9 +603,9 @@ void InitApp()
     // Setup display list for the floor.
 
     g_floorDisplayList = glGenLists(1);
-    glNewList(g_floorDisplayList, GL_COMPILE);   
+    glNewList(g_floorDisplayList, GL_COMPILE);
     glBegin(GL_QUADS);
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);    
+        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);
         glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
         glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
 
@@ -612,6 +626,7 @@ void InitApp()
 
 void InitGL()
 {
+    ZoneScoped; // NOLINT
     if (!(g_hDC = GetDC(g_hWnd)))
         throw std::runtime_error("GetDC() failed.");
 
@@ -663,12 +678,14 @@ void InitGL()
 
 GLuint LoadTexture(const char *pszFilename)
 {
+    ZoneScoped; // NOLINT
     return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR,
         GL_REPEAT, GL_REPEAT);
 }
 
 GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
                    GLint wrapS, GLint wrapT) {
+    ZoneScoped; // NOLINT
     GLuint id = 0;
     Bitmap bitmap;
 
@@ -699,11 +716,13 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
 
 void Log(const char *pszMessage)
 {
+    ZoneScoped; // NOLINT
     MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
 }
 
 void PerformCameraCollisionDetection()
 {
+    ZoneScoped; // NOLINT
     const Vector3 &pos = g_camera.getPosition();
     Vector3 newPos(pos);
 
@@ -729,6 +748,7 @@ void PerformCameraCollisionDetection()
 }
 
 void ProcessUserInput() {
+    ZoneScoped; // NOLINT
     Keyboard &keyboard = Keyboard::instance();
     Mouse &mouse = Mouse::instance();
 
@@ -770,8 +790,8 @@ void ProcessUserInput() {
 
         if (mouse.weightModifier() > 1.0f)
             mouse.setWeightModifier(1.0f);
-    }     
-    
+    }
+
     if (keyboard.keyPressed(Keyboard::KEY_COMMA)) {
         mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
 
@@ -795,6 +815,7 @@ void ProcessUserInput() {
 
 void RenderFloor()
 {
+    ZoneScoped; // NOLINT
     glActiveTextureARB(GL_TEXTURE0_ARB);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
@@ -814,6 +835,7 @@ void RenderFloor()
 }
 
 void RenderFrame() {
+    ZoneScoped; // NOLINT
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glDisable(GL_LIGHTING);
@@ -834,6 +856,7 @@ void RenderFrame() {
 
 void RenderText()
 {
+    ZoneScoped; // NOLINT
     std::ostringstream output;
 
     if (g_displayHelp)
@@ -901,6 +924,7 @@ void RenderText()
 
 void SetProcessorAffinity()
 {
+    ZoneScoped; // NOLINT
     // Assign the current thread to one processor. This ensures that timing
     // code runs on only one processor, and will not suffer any ill effects
     // from power management.
@@ -937,6 +961,7 @@ void SetProcessorAffinity()
 
 void ToggleFullScreen()
 {
+    ZoneScoped; // NOLINT
     static DWORD savedExStyle;
     static DWORD savedStyle;
     static RECT rcSaved;
@@ -984,6 +1009,7 @@ void ToggleFullScreen()
 }
 
 void UpdateCamera(float elapsedTimeSec) {
+    ZoneScoped; // NOLINT
     float heading = 0.0f;
     float pitch   = 0.0f;
     float roll    = 0.0f;
@@ -996,7 +1022,7 @@ void UpdateCamera(float elapsedTimeSec) {
     case Camera::CAMERA_BEHAVIOR_FIRST_PERSON:
         pitch   =  mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
         heading = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
-        
+
         g_camera.rotate(heading, pitch, 0.0f);
         break;
 
@@ -1004,7 +1030,7 @@ void UpdateCamera(float elapsedTimeSec) {
         heading = -direction.x * CAMERA_SPEED_FLIGHT_YAW * elapsedTimeSec;
         pitch   = -mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
         roll    = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
-        
+
         g_camera.rotate(heading, pitch, roll);
         direction.x = 0.0f; // ignore yaw motion when updating camera velocity
         break;
@@ -1017,6 +1043,7 @@ void UpdateCamera(float elapsedTimeSec) {
 }
 
 void UpdateFrame(float elapsedTimeSec) {
+    ZoneScoped; // NOLINT
     UpdateFrameRate(elapsedTimeSec);
 
     Mouse::instance().update();
@@ -1027,6 +1054,7 @@ void UpdateFrame(float elapsedTimeSec) {
 }
 
 void UpdateFrameRate(float elapsedTimeSec) {
+    ZoneScoped; // NOLINT
     static float accumTimeSec = 0.0f;
     static int frames = 0;
 
