@@ -8,6 +8,7 @@ list(
     ${CMAKE_SOURCE_DIR}/cmake/Modules
 )
 include(options)
+include(download_file)
 
 find_package(OpenGL REQUIRED)
 find_package(tracy  REQUIRED)
