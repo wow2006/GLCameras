@@ -3,5 +3,5 @@
 - [x] Adding `GLCamera1` to cmake.
 - [x] Adding options.cmake.
 - [x] Adding Findtracy.cmake.
-- [ ] Remove jpeg from git.
-- [ ] Download jpeg frpm google drive.
+- [x] Remove jpeg from git.
+- [x] Download jpeg frpm google drive.
