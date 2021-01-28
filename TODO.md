@@ -1,5 +1,7 @@
 - [x] Remove VC++ files.
 - [x] Adding a root `CMakeLists.txt`.
+- [x] Adding clang-format.
+- [x] Adding clang-tidy.
 
 GLCamera1
 ---------
