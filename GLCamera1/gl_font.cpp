@@ -19,13 +19,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
-
-#include <cstdarg>
-#include <vector>
-// OS
-#include <Windows.h>
-#include <VersionHelpers.h>
-
+// Internal
 #include "gl_font.h"
 
 // Taken from: wingdi.h

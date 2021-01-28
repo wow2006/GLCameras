@@ -19,10 +19,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
-
-#include <Tracy.hpp>
-
-#include <windows.h>
+// Internal
 #include "input.h"
 
 //-----------------------------------------------------------------------------

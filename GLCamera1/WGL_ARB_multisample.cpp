@@ -19,9 +19,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
-
-#include <cassert>
-#include <cstring>
+// Internal
 #include "WGL_ARB_multisample.h"
 
 namespace
@@ -38,7 +36,7 @@ namespace
     HDC g_hDC;
     HGLRC g_hRC;
     bool g_antiAliasingSupported;
-        
+
     LRESULT CALLBACK DummyGLWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch (msg)
@@ -86,9 +84,9 @@ namespace
 
             typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
             PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = 0;
-            
+
             LoadEntryPoint("wglGetExtensionsStringARB", wglGetExtensionsStringARB);
-                        
+
             if (wglGetExtensionsStringARB)
                 pszWGLExtensions = wglGetExtensionsStringARB(wglGetCurrentDC());
         }
@@ -164,11 +162,11 @@ namespace
             MSG msg;
 
             while ((bRet = GetMessage(&msg, 0, 0, 0)) != 0)
-            { 
-                TranslateMessage(&msg); 
-                DispatchMessage(&msg); 
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
             }
-        }        
+        }
 
         UnregisterClass(g_wcl.lpszClassName, g_wcl.hInstance);
     }
@@ -177,14 +175,14 @@ namespace
 void ChooseBestMultiSampleAntiAliasingPixelFormat(int &pf, int &maxSamples)
 {
     pf = 0;
-    maxSamples = 1;       
+    maxSamples = 1;
 
     if (!CreateDummyGLWindow())
     {
         DestroyDummyGLWindow();
         return;
     }
-    
+
     if (!g_antiAliasingSupported)
     {
         DestroyDummyGLWindow();

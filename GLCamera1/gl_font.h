@@ -22,13 +22,7 @@
 
 #if !defined(GL_FONT_H)
 #define GL_FONT_H
-
-#include <windows.h>
-#include <GL/gl.h>
-#include <cassert>
-#include <string>
-#include <vector>
-
+// Internal
 #include "bitmap.h"
 
 //-----------------------------------------------------------------------------

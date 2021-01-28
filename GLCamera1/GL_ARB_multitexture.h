@@ -23,9 +23,6 @@
 #if !defined(GL_ARB_MULTITEXTURE_H)
 #define GL_ARB_MULTITEXTURE_H
 
-#include <windows.h>
-#include <GL/gl.h>
-
 extern "C"
 {
 

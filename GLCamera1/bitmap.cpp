@@ -20,13 +20,8 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-//#pragma comment (lib, "olepro32.lib")   // for IPicture COM interface support
-
-#include <windows.h>
 #include <olectl.h.>    // for OleLoadPicture() and IPicture COM interface
-#include <cmath>
-#include <cstring>
-#include <vector>
+
 #include "bitmap.h"
 
 namespace

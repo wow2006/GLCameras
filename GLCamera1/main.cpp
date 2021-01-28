@@ -27,48 +27,7 @@
 // explore the implementation of the third person camera.
 //
 //-----------------------------------------------------------------------------
-
-#include <Tracy.hpp>
-
-#if !defined(WIN32_LEAN_AND_MEAN)
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#ifdef _WIN32
-#include <windows.h>
-#include <VersionHelpers.h>
-double get_time() {
-    LARGE_INTEGER t, f;
-    QueryPerformanceCounter(&t);
-    QueryPerformanceFrequency(&f);
-    return (double)t.QuadPart * 1000.0 / (double)f.QuadPart;
-}
-#else
-#include <sys/time.h>
-#include <sys/resource.h>
-
-double get_time() {
-    struct timeval t;
-    struct timezone tzp;
-    gettimeofday(&t, &tzp);
-    return t.tv_usec * 0.002;
-}
-#endif
-
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <cmath>
-#include <fstream>
-#include <iomanip>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <thread>
-
-#if defined(_DEBUG)
-#include <crtdbg.h>
-#endif
-
+// Internal
 #include "GL_ARB_multitexture.h"
 #include "WGL_ARB_multisample.h"
 #include "bitmap.h"
@@ -79,6 +38,7 @@ double get_time() {
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
+
 
 #define APP_TITLE "OpenGL Vector Camera Demo"
 

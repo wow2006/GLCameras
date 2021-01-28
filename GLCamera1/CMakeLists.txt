@@ -28,6 +28,12 @@ target_link_libraries(
     options::options
 )
 
+target_precompile_headers(
+    GLCamera1
+    PRIVATE
+    precompile.hpp
+)
+
 download_file(
   "${CMAKE_CURRENT_LIST_DIR}/floor_color_map.jpg"
   https://docs.google.com/uc?export=download&id=1o4eLs6OOvib-PGGonjAqTA0MfhDryFz1

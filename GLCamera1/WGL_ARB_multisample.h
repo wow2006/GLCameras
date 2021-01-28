@@ -71,9 +71,6 @@
 #if !defined(WGL_ARB_MULTISAMPLE_H)
 #define WGL_ARB_MULTISAMPLE_H
 
-#include <windows.h>
-#include <GL/gl.h>
-
 extern "C" {
 
 // GL_ARB_multisample

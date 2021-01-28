@@ -19,10 +19,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
-
-#include <Tracy.hpp>
-
-#include <cmath>
+// Internal
 #include "camera.h"
 
 const float Camera::DEFAULT_FOVX  = 90.0f;

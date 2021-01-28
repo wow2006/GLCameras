@@ -23,7 +23,6 @@
 #if !defined(BITMAP_H)
 #define BITMAP_H
 
-#include <windows.h>
 #include <tchar.h>
 
 //-----------------------------------------------------------------------------
@@ -78,7 +77,7 @@ public:
 
     void fill(int r, int g, int b, int a);
     void fill(float r, float g, float b, float a);
-    
+
     BYTE *getPixel(int x, int y) const
     { return &m_pBits[(y * pitch) + (x * 4)]; }
 
@@ -89,7 +88,7 @@ public:
     bool loadBitmap(LPCTSTR pszFilename);
     bool loadPicture(LPCTSTR pszFilename);
     bool loadTarga(LPCTSTR pszFilename);
-    
+
     bool saveBitmap(LPCTSTR pszFilename) const;
     bool saveTarga(LPCTSTR pszFilename) const;
 
@@ -101,18 +100,18 @@ public:
 
     void copyBytesAlpha8Bit(BYTE *pDest) const;
     void copyBytesAlpha32Bit(BYTE *pDest) const;
-    
+
     void setPixels(const BYTE *pPixels, int w, int h, int bytesPerPixel);
 
     void flipHorizontal();
     void flipVertical();
-    
+
     void resize(int newWidth, int newHeight);
 
 private:
     DWORD createPixel(int r, int g, int b, int a) const;
     DWORD createPixel(float r, float g, float b, float a) const;
-    
+
     static const int HIMETRIC_INCH = 2540; // matches constant in MFC CDC class
 
     static int m_logpixelsx;
