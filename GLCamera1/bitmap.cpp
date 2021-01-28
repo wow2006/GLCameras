@@ -20,7 +20,7 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-#pragma comment (lib, "olepro32.lib")   // for IPicture COM interface support
+//#pragma comment (lib, "olepro32.lib")   // for IPicture COM interface support
 
 #include <windows.h>
 #include <olectl.h.>    // for OleLoadPicture() and IPicture COM interface
@@ -32,7 +32,7 @@
 namespace
 {
     #pragma pack(push, 1)
-    
+
     // TGA file header structure. This *must* be byte aligned.
     struct TgaHeader
     {
@@ -84,7 +84,7 @@ Bitmap::Bitmap(const Bitmap &bitmap)
     pitch = 0;
     m_hPrevObj = 0;
     m_pBits = 0;
-    
+
     clone(bitmap);
 }
 
@@ -155,7 +155,7 @@ bool Bitmap::create(int widthPixels, int heightPixels)
     info.bmiHeader.biCompression = BI_RGB;
     info.bmiHeader.biPlanes = 1;
 
-    hBitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, 
+    hBitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS,
         reinterpret_cast<void**>(&m_pBits), 0, 0);
 
     if (!hBitmap)
@@ -422,7 +422,7 @@ bool Bitmap::loadTarga(LPCTSTR pszFilename)
 
     DWORD dwBytesRead = 0;
     TgaHeader header = {0};
-    
+
     // Read in the TGA file header.
     ReadFile(hFile, &header, sizeof(header), &dwBytesRead, 0);
 
@@ -459,7 +459,7 @@ bool Bitmap::loadTarga(LPCTSTR pszFilename)
     else
     {
         // TGA image is stored bottom up in file. Need to flip it.
-        
+
         BYTE *pRow = 0;
 
         for (int i = 0; i < header.height; ++i)
@@ -493,7 +493,7 @@ void Bitmap::setPixels(const BYTE *pPixels, int w, int h, int bytesPerPixel)
     {
         const BYTE *pSrcRow = 0;
         BYTE *pDestRow = 0;
-                
+
         for (int i = 0; i < h; ++i)
         {
             pSrcRow = &pPixels[i * srcPitch];
@@ -569,7 +569,7 @@ bool Bitmap::saveBitmap(LPCTSTR pszFilename) const
     // Write the BMP headers.
     WriteFile(hFile, &bfh, sizeof(bfh), &dwNumberOfBytesWritten, 0);
     WriteFile(hFile, &bih, sizeof(bih), &dwNumberOfBytesWritten, 0);
-    
+
     // Write the pixel data.
     // Need to store the bitmap pixels bottom-up.
     for (int i = 0; i < height; ++i)
@@ -599,7 +599,7 @@ bool Bitmap::saveTarga(LPCTSTR pszFilename) const
     header.pixelDepth = 32;
     header.imageType = 2;               // uncompressed true-color
     header.imageDescriptor = 0x20;      // top-down orientation
-        
+
     DWORD dwNumberOfBytesWritten = 0;
 
     // Write file header.
@@ -724,7 +724,7 @@ void Bitmap::copyBytesAlpha32Bit(BYTE *pDest) const
     float fRed = 0.0f;
     float fGreen = 0.0f;
     float fBlue = 0.0f;
-    
+
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
