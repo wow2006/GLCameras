@@ -16,12 +16,12 @@ target_sources(
     camera.cpp
     gl_font.cpp
     input.cpp
-    mathlib.cpp
 )
 
 target_link_libraries(
     GLCamera1
     PRIVATE
+    glm
     OpenGL::GL
     OpenGL::GLU
     tracy::tracy

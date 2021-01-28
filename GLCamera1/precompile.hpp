@@ -40,3 +40,6 @@ inline double get_time() {
 // GL
 #include <GL/gl.h>
 #include <GL/glu.h>
+// glm
+#include <glm/glm.hpp>
+#include <glm/ext/matrix_transform.hpp>

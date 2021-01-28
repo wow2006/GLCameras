@@ -51,12 +51,12 @@
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT     0x84FE
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
 
-const Vector3 CAMERA_ACCELERATION(8.0f, 8.0f, 8.0f);
+const glm::vec3 CAMERA_ACCELERATION(8.0f, 8.0f, 8.0f);
 const float   CAMERA_FOVX = 90.0f;
-const Vector3 CAMERA_POS(0.0f, 1.0f, 0.0f);
+const glm::vec3 CAMERA_POS(0.0f, 1.0f, 0.0f);
 const float   CAMERA_SPEED_ROTATION = 0.2f;
 const float   CAMERA_SPEED_FLIGHT_YAW = 100.0f;
-const Vector3 CAMERA_VELOCITY(2.0f, 2.0f, 2.0f);
+const glm::vec3 CAMERA_VELOCITY(2.0f, 2.0f, 2.0f);
 const float   CAMERA_ZFAR = 100.0f;
 const float   CAMERA_ZNEAR = 0.1f;
 
@@ -88,8 +88,8 @@ GLuint    g_floorLightMapTexture;
 GLuint    g_floorDisplayList;
 GLFont    g_font;
 Camera    g_camera;
-Vector3   g_cameraBoundsMax;
-Vector3   g_cameraBoundsMin;
+glm::vec3   g_cameraBoundsMax;
+glm::vec3   g_cameraBoundsMin;
 float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 
 //-----------------------------------------------------------------------------
@@ -102,7 +102,7 @@ HWND    CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
 void    EnableVerticalSync(bool enableVerticalSync);
 bool    ExtensionSupported(const char *pszExtensionName);
 float   GetElapsedTimeInSeconds();
-void    GetMovementDirection(Vector3 &direction);
+void    GetMovementDirection(glm::vec3 &direction);
 bool    Init();
 void    InitApp();
 void    InitGL();
@@ -421,7 +421,7 @@ float GetElapsedTimeInSeconds()
     return actualElapsedTimeSec;
 }
 
-void GetMovementDirection(Vector3 &direction) {
+void GetMovementDirection(glm::vec3 &direction) {
     ZoneScoped; // NOLINT
     static bool moveForwardsPressed  = false;
     static bool moveBackwardsPressed = false;
@@ -430,10 +430,10 @@ void GetMovementDirection(Vector3 &direction) {
     static bool moveUpPressed        = false;
     static bool moveDownPressed      = false;
 
-    Vector3 velocity   = g_camera.getCurrentVelocity();
+    glm::vec3 velocity   = g_camera.getCurrentVelocity();
     Keyboard &keyboard = Keyboard::instance();
 
-    direction.set(0.0f, 0.0f, 0.0f);
+    direction = {0.0f, 0.0f, 0.0f};
 
     if (keyboard.keyDown(Keyboard::KEY_W)) {
         if (!moveForwardsPressed) {
@@ -549,13 +549,13 @@ void InitApp()
         static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
         CAMERA_ZNEAR, CAMERA_ZFAR);
 
-    g_camera.setBehavior(Camera::CAMERA_BEHAVIOR_FIRST_PERSON);
+    g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
     g_camera.setPosition(CAMERA_POS);
     g_camera.setAcceleration(CAMERA_ACCELERATION);
     g_camera.setVelocity(CAMERA_VELOCITY);
 
-    g_cameraBoundsMax.set(FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f);
-    g_cameraBoundsMin.set(-FLOOR_WIDTH / 2.0f, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0f);
+    g_cameraBoundsMax = {FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f};
+    g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0f, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0f};
 
     Mouse::instance().hideCursor(true);
     Mouse::instance().moveToWindowCenter();
@@ -676,8 +676,8 @@ void Log(const char *pszMessage)
 void PerformCameraCollisionDetection()
 {
     ZoneScoped; // NOLINT
-    const Vector3 &pos = g_camera.getPosition();
-    Vector3 newPos(pos);
+    const glm::vec3 &pos = g_camera.getPosition();
+    glm::vec3 newPos(pos);
 
     if (pos.x > g_cameraBoundsMax.x)
         newPos.x = g_cameraBoundsMax.x;
@@ -756,11 +756,11 @@ void ProcessUserInput() {
         g_flightModeEnabled = !g_flightModeEnabled;
 
         if (g_flightModeEnabled) {
-            g_camera.setBehavior(Camera::CAMERA_BEHAVIOR_FLIGHT);
+            g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT);
         } else {
-            const Vector3 &cameraPos = g_camera.getPosition();
+            const glm::vec3 &cameraPos = g_camera.getPosition();
 
-            g_camera.setBehavior(Camera::CAMERA_BEHAVIOR_FIRST_PERSON);
+            g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
             g_camera.setPosition(cameraPos.x, CAMERA_POS.y, cameraPos.z);
         }
     }
@@ -966,20 +966,20 @@ void UpdateCamera(float elapsedTimeSec) {
     float heading = 0.0f;
     float pitch   = 0.0f;
     float roll    = 0.0f;
-    Vector3 direction;
+    glm::vec3 direction;
     Mouse &mouse = Mouse::instance();
 
     GetMovementDirection(direction);
 
     switch (g_camera.getBehavior()) {
-    case Camera::CAMERA_BEHAVIOR_FIRST_PERSON:
+    case Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON:
         pitch   =  mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
         heading = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
         g_camera.rotate(heading, pitch, 0.0f);
         break;
 
-    case Camera::CAMERA_BEHAVIOR_FLIGHT:
+    case Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT:
         heading = -direction.x * CAMERA_SPEED_FLIGHT_YAW * elapsedTimeSec;
         pitch   = -mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
         roll    = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
