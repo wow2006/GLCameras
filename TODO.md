@@ -11,7 +11,7 @@ GLCamera1
 - [x] Remove jpeg from git.
 - [x] Download jpeg frpm google drive.
 - [x] Create precompiled header.
-- [ ] Replace `mathlib` with glm.
+- [x] Replace `mathlib` with glm. `NOTE: x,y-axis is inversed`
 - [ ] Replace `bitmap` with stb.
 - [ ] Remove Multisample.
 - [ ] Remove Multitexture.
