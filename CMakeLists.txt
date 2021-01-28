@@ -10,9 +10,10 @@ list(
 include(options)
 include(download_file)
 
-find_package(glm    REQUIRED)
-find_package(OpenGL REQUIRED)
-find_package(tracy  REQUIRED)
+find_package(glm       REQUIRED)
+find_package(OpenGL    REQUIRED)
+find_package(tracy     REQUIRED)
+find_package(stb_image REQUIRED)
 
 add_subdirectory(GLCamera1)
 #add_subdirectory(GLCamera2)

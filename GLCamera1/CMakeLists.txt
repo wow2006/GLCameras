@@ -22,6 +22,7 @@ target_link_libraries(
     GLCamera1
     PRIVATE
     glm
+    stb::image
     OpenGL::GL
     OpenGL::GLU
     tracy::tracy
