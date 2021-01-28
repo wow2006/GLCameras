@@ -28,6 +28,18 @@ target_link_libraries(
     options::options
 )
 
+download_file(
+  "${CMAKE_CURRENT_LIST_DIR}/floor_color_map.jpg"
+  https://docs.google.com/uc?export=download&id=1o4eLs6OOvib-PGGonjAqTA0MfhDryFz1
+  1658ebf1dadbc48b97f7961be885ed68
+)
+
+download_file(
+  "${CMAKE_CURRENT_LIST_DIR}/floor_light_map.jpg"
+  https://docs.google.com/uc?export=download&id=1ePw9OuVFflqfiqBG5WuUvYaEmvPrrwRE
+  4476d38d396df90dbfdd3d8675c7e7a1
+)
+
 file(
     COPY ${CMAKE_CURRENT_LIST_DIR}/floor_color_map.jpg
          ${CMAKE_CURRENT_LIST_DIR}/floor_light_map.jpg
