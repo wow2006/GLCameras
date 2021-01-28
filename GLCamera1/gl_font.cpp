@@ -22,6 +22,9 @@
 
 #include <cstdarg>
 #include <vector>
+// OS
+#include <Windows.h>
+#include <VersionHelpers.h>
 
 #include "gl_font.h"
 
@@ -65,17 +68,12 @@ GLFont::GLFont()
         }
     }
 
-    if (!m_lfQuality)
-    {
-        DWORD dwVersion = GetVersion();
-        DWORD dwMajorVersion = static_cast<DWORD>((LOBYTE(LOWORD(dwVersion))));
-        DWORD dwMinorVersion = static_cast<DWORD>((HIBYTE(LOWORD(dwVersion))));
-
-        // Windows XP and higher will support ClearType quality fonts.
-        if (dwMajorVersion >= 6 || (dwMajorVersion == 5 && dwMinorVersion == 1))
+    if (!m_lfQuality) {
+        if(IsWindowsXPOrGreater()) {
             m_lfQuality = CLEARTYPE_QUALITY;
-        else
+        } else {
             m_lfQuality = ANTIALIASED_QUALITY;
+        }
     }
 }
 

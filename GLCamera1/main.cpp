@@ -36,6 +36,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <VersionHelpers.h>
 double get_time() {
     LARGE_INTEGER t, f;
     QueryPerformanceCounter(&t);
@@ -54,7 +55,6 @@ double get_time() {
 }
 #endif
 
-#include <windows.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <cmath>
@@ -632,7 +632,6 @@ void InitGL()
 
     int pf = 0;
     PIXELFORMATDESCRIPTOR pfd = {0};
-    OSVERSIONINFO osvi = {0};
 
     pfd.nSize = sizeof(pfd);
     pfd.nVersion = 1;
@@ -642,15 +641,9 @@ void InitGL()
     pfd.cDepthBits = 16;
     pfd.iLayerType = PFD_MAIN_PLANE;
 
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-    if (!GetVersionEx(&osvi))
-        throw std::runtime_error("GetVersionEx() failed.");
-
-    // When running under Windows Vista or later support desktop composition.
-
-    if (osvi.dwMajorVersion > 6 || (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion >= 0))
+    if (IsWindowsVistaOrGreater()) {
         pfd.dwFlags |=  PFD_SUPPORT_COMPOSITION;
+    }
 
     ChooseBestMultiSampleAntiAliasingPixelFormat(pf, g_msaaSamples);
 
