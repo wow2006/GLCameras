@@ -30,3 +30,10 @@ target_include_directories(
     SYSTEM INTERFACE
     ${stb_DIR}
 )
+
+target_compile_definitions(
+    stb_image
+    INTERFACE
+    STBI_ONLY_JPEG
+    STB_IMAGE_IMPLEMENTATION
+)

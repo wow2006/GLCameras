@@ -30,10 +30,11 @@
 // Internal
 #include "GL_ARB_multitexture.h"
 #include "WGL_ARB_multisample.h"
-#include "bitmap.h"
 #include "camera.h"
 #include "gl_font.h"
 #include "input.h"
+// stb
+#include <stb_image.h>
 
 //-----------------------------------------------------------------------------
 // Constants.
@@ -640,13 +641,11 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
                    GLint wrapS, GLint wrapT) {
     ZoneScoped; // NOLINT
     GLuint id = 0;
-    Bitmap bitmap;
+    int width, height, channels;
+    stbi_set_flip_vertically_on_load(1);
+    void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
-    if (bitmap.loadPicture(pszFilename)) {
-        // The Bitmap class loads images and orients them top-down.
-        // OpenGL expects bitmap images to be oriented bottom-up.
-        bitmap.flipVertical();
-
+    if(pImage != nullptr) {
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
 
@@ -660,8 +659,8 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
                 g_maxAnisotrophy);
         }
 
-        gluBuild2DMipmaps(GL_TEXTURE_2D, 4, bitmap.width, bitmap.height,
-            GL_BGRA_EXT, GL_UNSIGNED_BYTE, bitmap.getPixels());
+        gluBuild2DMipmaps(GL_TEXTURE_2D, 4, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+        stbi_image_free(pImage);
     }
 
     return id;
