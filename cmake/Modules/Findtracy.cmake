@@ -22,7 +22,7 @@ add_library(
 
 target_include_directories(
     tracy
-    PUBLIC
+    SYSTEM PUBLIC
     ${tracy_DIR}
 )
 
