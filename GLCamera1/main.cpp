@@ -27,21 +27,19 @@
 // explore the implementation of the third person camera.
 //
 //-----------------------------------------------------------------------------
-// Internal
-#include "GL_ARB_multitexture.h"
-#include "WGL_ARB_multisample.h"
-#include "camera.h"
-#include "gl_font.h"
-#include "input.h"
 // stb
 #include <stb_image.h>
+// Internal
+#include "input.h"
+#include "camera.h"
 
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
-
+// clang-format off
 using wglCreateContextAttribsARBFunc = HGLRC (*)(HDC, HGLRC, const int*);
 using wglChoosePixelFormatARBFunc    = BOOL (*)(HDC , const int*, const FLOAT*, UINT, int*, UINT*);
+// clang-format on
 
 constexpr auto APP_TITLE = "OpenGL Vector Camera Demo";
 
@@ -51,22 +49,22 @@ constexpr auto APP_TITLE = "OpenGL Vector Camera Demo";
 #endif
 
 // GL_EXT_texture_filter_anisotropic
-#define GL_TEXTURE_MAX_ANISOTROPY_EXT     0x84FE
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+constexpr auto GL_TEXTURE_MAX_ANISOTROPY_EXT     = 0x84FE;
+constexpr auto GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF;
 
-const glm::vec3 CAMERA_ACCELERATION(8.0f, 8.0f, 8.0f);
-const float   CAMERA_FOVX = 90.0f;
-const glm::vec3 CAMERA_POS(0.0f, 1.0f, 0.0f);
-const float   CAMERA_SPEED_ROTATION = 0.2f;
-const float   CAMERA_SPEED_FLIGHT_YAW = 100.0f;
-const glm::vec3 CAMERA_VELOCITY(2.0f, 2.0f, 2.0f);
-const float   CAMERA_ZFAR = 100.0f;
-const float   CAMERA_ZNEAR = 0.1f;
+const glm::vec3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
+const float     CAMERA_FOVX = 90.0F;
+const glm::vec3 CAMERA_POS(0.0F, 1.0F, 0.0F);
+const float     CAMERA_SPEED_ROTATION   = 0.2F;
+const float     CAMERA_SPEED_FLIGHT_YAW = 100.0F;
+const glm::vec3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
+const float     CAMERA_ZFAR  = 100.0F;
+const float     CAMERA_ZNEAR = 0.1F;
 
-const float   FLOOR_WIDTH = 16.0f;
-const float   FLOOR_HEIGHT = 16.0f;
-const float   FLOOR_TILE_S = 8.0f;
-const float   FLOOR_TILE_T = 8.0f;
+const float FLOOR_WIDTH  = 16.0F;
+const float FLOOR_HEIGHT = 16.0F;
+const float FLOOR_TILE_S = 8.0F;
+const float FLOOR_TILE_T = 8.0F;
 
 //-----------------------------------------------------------------------------
 // Globals.
@@ -367,8 +365,7 @@ bool ExtensionSupported(const char *pszExtensionName) {
     if (!pszGLExtensions)
         pszGLExtensions = reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS));
 
-    if (!pszWGLExtensions)
-    {
+    if (!pszWGLExtensions) {
         // WGL_ARB_extensions_string.
 
         typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
@@ -685,6 +682,17 @@ void InitGL() {
   InitOpenglExtensions();
 
   // clang-format off
+  constexpr auto WGL_DRAW_TO_WINDOW_ARB = 0x2001;
+  constexpr auto WGL_ACCELERATION_ARB   = 0x2003;
+  constexpr auto WGL_SUPPORT_OPENGL_ARB = 0x2010;
+  constexpr auto WGL_DOUBLE_BUFFER_ARB  = 0x2011;
+  constexpr auto WGL_PIXEL_TYPE_ARB     = 0x2013;
+  constexpr auto WGL_COLOR_BITS_ARB     = 0x2014;
+  constexpr auto WGL_DEPTH_BITS_ARB     = 0x2022;
+  constexpr auto WGL_STENCIL_BITS_ARB   = 0x2023;
+
+  constexpr auto WGL_FULL_ACCELERATION_ARB = 0x2027;
+  constexpr auto WGL_TYPE_RGBA_ARB         = 0x202B;
   // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
   constexpr int pixel_format_attribs[] = {
       WGL_DRAW_TO_WINDOW_ARB,     GL_TRUE,
@@ -876,43 +884,45 @@ void ProcessUserInput() {
 }
 
 void RenderFloor() {
-    ZoneScoped; // NOLINT
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
+  ZoneScoped; // NOLINT
 
-    glActiveTextureARB(GL_TEXTURE1_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
+  glActiveTexture(GL_TEXTURE0);
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
 
-    //glCallList(g_floorDisplayList);
+  glActiveTexture(GL_TEXTURE1);
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
+  //glCallList(g_floorDisplayList);
 
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
 }
 
 void RenderFrame() {
-    ZoneScoped; // NOLINT
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-    //glDisable(GL_LIGHTING);
+  ZoneScoped; // NOLINT
 
-    glViewport(0, 0, g_windowWidth, g_windowHeight);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+  //glDisable(GL_LIGHTING);
 
-    //glMatrixMode(GL_PROJECTION);
-    //glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
+  glViewport(0, 0, g_windowWidth, g_windowHeight);
+  glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    //glMatrixMode(GL_MODELVIEW);
-    //glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
+  //glMatrixMode(GL_PROJECTION);
+  //glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
 
-    RenderFloor();
-    RenderText();
+  //glMatrixMode(GL_MODELVIEW);
+  //glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
+
+  RenderFloor();
+  //RenderText();
 }
 
 void RenderText() {
