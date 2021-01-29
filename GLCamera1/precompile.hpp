@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+// gl3w
+#include <GL/gl3w.h>
 // OS
 #ifdef _WIN32
 #include <windows.h>
@@ -37,9 +39,6 @@ inline double get_time() {
 #endif
 // Tracy
 #include <Tracy.hpp>
-// GL
-#include <GL/gl.h>
-#include <GL/glu.h>
 // glm
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_transform.hpp>

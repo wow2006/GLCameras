@@ -40,8 +40,10 @@
 // Constants.
 //-----------------------------------------------------------------------------
 
+using wglCreateContextAttribsARBFunc = HGLRC (*)(HDC, HGLRC, const int*);
+using wglChoosePixelFormatARBFunc    = BOOL (*)(HDC , const int*, const FLOAT*, UINT, int*, UINT*);
 
-#define APP_TITLE "OpenGL Vector Camera Demo"
+constexpr auto APP_TITLE = "OpenGL Vector Camera Demo";
 
 // Windows Vista compositing support.
 #if !defined(PFD_SUPPORT_COMPOSITION)
@@ -70,28 +72,31 @@ const float   FLOOR_TILE_T = 8.0f;
 // Globals.
 //-----------------------------------------------------------------------------
 
-HWND      g_hWnd;
-HDC       g_hDC;
-HGLRC     g_hRC;
-HINSTANCE g_hInstance;
-int       g_framesPerSecond;
-int       g_windowWidth;
-int       g_windowHeight;
-int       g_msaaSamples;
-int       g_maxAnisotrophy;
-bool      g_isFullScreen;
-bool      g_hasFocus;
-bool      g_enableVerticalSync;
-bool      g_displayHelp;
-bool      g_flightModeEnabled;
-GLuint    g_floorColorMapTexture;
-GLuint    g_floorLightMapTexture;
-GLuint    g_floorDisplayList;
-GLFont    g_font;
-Camera    g_camera;
-glm::vec3   g_cameraBoundsMax;
-glm::vec3   g_cameraBoundsMin;
-float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
+static HWND      g_hWnd;
+static HDC       g_hDC;
+static HGLRC     g_hRC;
+static HINSTANCE g_hInstance;
+static int       g_framesPerSecond;
+static int       g_windowWidth;
+static int       g_windowHeight;
+static int       g_msaaSamples;
+static int       g_maxAnisotrophy;
+static bool      g_isFullScreen;
+static bool      g_hasFocus;
+static bool      g_enableVerticalSync;
+static bool      g_displayHelp;
+static bool      g_flightModeEnabled;
+static GLuint    g_floorColorMapTexture;
+static GLuint    g_floorLightMapTexture;
+static GLuint    g_floorDisplayList;
+//static GLFont    g_font;
+static Camera    g_camera;
+static glm::vec3 g_cameraBoundsMax;
+static glm::vec3 g_cameraBoundsMin;
+static float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
+
+wglCreateContextAttribsARBFunc wglCreateContextAttribsARB;
+wglChoosePixelFormatARBFunc    wglChoosePixelFormatARB;
 
 //-----------------------------------------------------------------------------
 // Functions Prototypes.
@@ -106,6 +111,7 @@ float   GetElapsedTimeInSeconds();
 void    GetMovementDirection(glm::vec3 &direction);
 bool    Init();
 void    InitApp();
+void    InitOpenglExtensions();
 void    InitGL();
 void    LimitFrameRate(float frameRateLimit, float frameTimeSeconds);
 GLuint  LoadTexture(const char *pszFilename);
@@ -139,55 +145,57 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     MSG msg = {0};
     WNDCLASSEX wcl = {0};
 
-    wcl.cbSize = sizeof(wcl);
-    wcl.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-    wcl.lpfnWndProc = WindowProc;
-    wcl.cbClsExtra = 0;
-    wcl.cbWndExtra = 0;
-    wcl.hInstance = g_hInstance = hInstance;
-    wcl.hIcon = LoadIcon(0, IDI_APPLICATION);
-    wcl.hCursor = LoadCursor(0, IDC_ARROW);
+    // clang-format off
+    wcl.cbSize        = sizeof(wcl);
+    wcl.style         = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+    wcl.lpfnWndProc   = WindowProc;
+    wcl.cbClsExtra    = 0;
+    wcl.cbWndExtra    = 0;
+    wcl.hInstance     = g_hInstance = hInstance;
+    wcl.hIcon         = LoadIcon(0, IDI_APPLICATION);
+    wcl.hCursor       = LoadCursor(0, IDC_ARROW);
     wcl.hbrBackground = 0;
-    wcl.lpszMenuName = 0;
+    wcl.lpszMenuName  = 0;
     wcl.lpszClassName = "GLWindowClass";
-    wcl.hIconSm = 0;
+    wcl.hIconSm       = 0;
+    // clang-format on
 
-    if (!RegisterClassEx(&wcl))
-        return 0;
+    if (!RegisterClassEx(&wcl)) {
+        return EXIT_FAILURE;
+    }
 
-    g_hWnd = CreateAppWindow(wcl, APP_TITLE);
+    const auto hWnd = CreateAppWindow(wcl, APP_TITLE);
+    if(!hWnd) {
+        Log("Error: CreateAppWindow()");
+    }
+    g_hWnd = hWnd;
 
-    if (g_hWnd)
-    {
+    if(g_hWnd) {
         SetProcessorAffinity();
 
-        if (Init())
-        {
+        if(Init()) {
             ShowWindow(g_hWnd, nShowCmd);
             UpdateWindow(g_hWnd);
 
-            while (true)
-            {
-                while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
-                {
-                    if (msg.message == WM_QUIT)
+            while(true) {
+                while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+                    if (msg.message == WM_QUIT) {
                         break;
+                    }
 
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
 
-                if (msg.message == WM_QUIT)
+                if (msg.message == WM_QUIT) {
                     break;
+                }
 
-                if (g_hasFocus)
-                {
+                if (g_hasFocus) {
                     UpdateFrame(GetElapsedTimeInSeconds());
                     RenderFrame();
                     SwapBuffers(g_hDC);
-                }
-                else
-                {
+                } else {
                     WaitMessage();
                 }
                 FrameMark;
@@ -264,7 +272,7 @@ void Cleanup()
 void CleanupApp()
 {
     ZoneScoped; // NOLINT
-    g_font.destroy();
+    //g_font.destroy();
 
     if (g_floorColorMapTexture)
     {
@@ -278,15 +286,13 @@ void CleanupApp()
         g_floorLightMapTexture = 0;
     }
 
-    if (g_floorDisplayList)
-    {
-        glDeleteLists(g_floorDisplayList, 1);
+    if (g_floorDisplayList) {
+        //glDeleteLists(g_floorDisplayList, 1);
         g_floorDisplayList = 0;
     }
 }
 
-HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle)
-{
+HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle) {
     ZoneScoped; // NOLINT
     // Create a window that is centered on the desktop. It's exactly 1/4 the
     // size of the desktop. Don't allow it to be resized.
@@ -295,33 +301,48 @@ HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle)
     DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
                      WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
 
-    HWND hWnd = CreateWindowEx(wndExStyle, wcl.lpszClassName, pszTitle,
-                    wndStyle, 0, 0, 0, 0, 0, 0, wcl.hInstance, 0);
+    // clang-format off
+    HWND hWnd = CreateWindowEx(
+      wndExStyle,
+      wcl.lpszClassName,
+      pszTitle,
+      wndStyle,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      wcl.hInstance,
+      0
+    );
+    // clang-format on
 
-    if (hWnd)
-    {
-        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        int halfScreenWidth = screenWidth / 2;
-        int halfScreenHeight = screenHeight / 2;
-        int left = (screenWidth - halfScreenWidth) / 2;
-        int top = (screenHeight - halfScreenHeight) / 2;
-        RECT rc = {0};
-
-        SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
-        AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
-        MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
-
-        GetClientRect(hWnd, &rc);
-        g_windowWidth = rc.right - rc.left;
-        g_windowHeight = rc.bottom - rc.top;
+    if (!hWnd) {
+        Log("Error: CreateWindowEx()");
     }
+
+    const int screenWidth      = GetSystemMetrics(SM_CXSCREEN);
+    const int screenHeight     = GetSystemMetrics(SM_CYSCREEN);
+    const int halfScreenWidth  = screenWidth / 2;
+    const int halfScreenHeight = screenHeight / 2;
+    const int left = (screenWidth - halfScreenWidth) / 2;
+    const int top  = (screenHeight - halfScreenHeight) / 2;
+
+    RECT rc = {0};
+    SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
+
+    AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
+    MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
+
+    GetClientRect(hWnd, &rc);
+    g_windowWidth  = rc.right - rc.left;
+    g_windowHeight = rc.bottom - rc.top;
 
     return hWnd;
 }
 
-void EnableVerticalSync(bool enableVerticalSync)
-{
+void EnableVerticalSync(bool enableVerticalSync) {
     ZoneScoped; // NOLINT
     // WGL_EXT_swap_control.
 
@@ -338,8 +359,7 @@ void EnableVerticalSync(bool enableVerticalSync)
     }
 }
 
-bool ExtensionSupported(const char *pszExtensionName)
-{
+bool ExtensionSupported(const char *pszExtensionName) {
     ZoneScoped; // NOLINT
     static const char *pszGLExtensions = 0;
     static const char *pszWGLExtensions = 0;
@@ -370,8 +390,7 @@ bool ExtensionSupported(const char *pszExtensionName)
     return true;
 }
 
-float GetElapsedTimeInSeconds()
-{
+float GetElapsedTimeInSeconds() {
     ZoneScoped; // NOLINT
     // Returns the elapsed time (in seconds) since the last time this function
     // was called. This elaborate setup is to guard against large spikes in
@@ -503,21 +522,17 @@ void GetMovementDirection(glm::vec3 &direction) {
     }
 }
 
-bool Init()
-{
+bool Init() {
     ZoneScoped; // NOLINT
-    try
-    {
+    try {
         InitGL();
 
-        if (!ExtensionSupported("GL_ARB_multitexture"))
-            throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
+        //if (!ExtensionSupported("GL_ARB_multitexture"))
+        //    throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
 
         InitApp();
         return true;
-    }
-    catch (const std::exception &e)
-    {
+    } catch (const std::exception &e) {
         std::ostringstream msg;
 
         msg << "Application initialization failed!" << std::endl << std::endl;
@@ -528,13 +543,13 @@ bool Init()
     }
 }
 
-void InitApp()
-{
+void InitApp() {
     ZoneScoped; // NOLINT
-    // Setup fonts.
 
-    if (!g_font.create("Arial", 10, GLFont::BOLD))
-        throw std::runtime_error("Failed to create font.");
+    // Setup fonts.
+    //if (!g_font.create("Arial", 10, GLFont::BOLD)) {
+    //    throw std::runtime_error("Failed to create font.");
+    //}
 
     // Load textures.
 
@@ -563,75 +578,172 @@ void InitApp()
 
     // Setup display list for the floor.
 
-    g_floorDisplayList = glGenLists(1);
-    glNewList(g_floorDisplayList, GL_COMPILE);
-    glBegin(GL_QUADS);
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
-        glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0f);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 0.0f);
-        glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 1.0f);
-        glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 1.0f);
-        glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-    glEnd();
-    glEndList();
+    //g_floorDisplayList = glGenLists(1);
+    //glNewList(g_floorDisplayList, GL_COMPILE);
+    //glBegin(GL_QUADS);
+    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);
+    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
+    //    glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+    //
+    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0f);
+    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 0.0f);
+    //    glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+    //
+    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
+    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 1.0f);
+    //    glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
+    //
+    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
+    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 1.0f);
+    //    glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
+    //glEnd();
+    //glEndList();
 }
 
-void InitGL()
-{
-    ZoneScoped; // NOLINT
-    if (!(g_hDC = GetDC(g_hWnd)))
-        throw std::runtime_error("GetDC() failed.");
+void InitOpenglExtensions() {
+  ZoneScoped;  // NOLINT
 
-    int pf = 0;
-    PIXELFORMATDESCRIPTOR pfd = {0};
+  // clang-format off
+  WNDCLASSA tempWindowClass = {};
+  tempWindowClass.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+  tempWindowClass.lpfnWndProc   = DefWindowProcA;
+  tempWindowClass.hInstance     = GetModuleHandle(0);
+  tempWindowClass.lpszClassName = "Temp";
+  // clang-format on
 
-    pfd.nSize = sizeof(pfd);
-    pfd.nVersion = 1;
-    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 24;
-    pfd.cDepthBits = 16;
-    pfd.iLayerType = PFD_MAIN_PLANE;
+  if(!RegisterClassA(&tempWindowClass)) {
+    throw std::runtime_error("RegisterClassA() failed.");
+  }
 
-    if (IsWindowsVistaOrGreater()) {
-        pfd.dwFlags |=  PFD_SUPPORT_COMPOSITION;
-    }
+  HWND dummyWindow = CreateWindowExA(
+    0,
+    tempWindowClass.lpszClassName,
+    "Dummy OpenGL Window",
+    0,
+    CW_USEDEFAULT,
+    CW_USEDEFAULT,
+    CW_USEDEFAULT,
+    CW_USEDEFAULT,
+    0,
+    0,
+    tempWindowClass.hInstance,
+    0
+  );
 
-    ChooseBestMultiSampleAntiAliasingPixelFormat(pf, g_msaaSamples);
+  if(!dummyWindow) {
+    throw std::runtime_error("CreateWindowExA() failed.");
+  }
 
-    if (!pf)
-        pf = ChoosePixelFormat(g_hDC, &pfd);
+  HDC dummyDC = GetDC(dummyWindow);
 
-    if (!SetPixelFormat(g_hDC, pf, &pfd))
-        throw std::runtime_error("SetPixelFormat() failed.");
+  // clang-format off
+  PIXELFORMATDESCRIPTOR pfd = {};
+  pfd.nSize        = sizeof(pfd);
+  pfd.nVersion     = 1;
+  pfd.iPixelType   = PFD_TYPE_RGBA;
+  pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+  pfd.cColorBits   = 32;
+  pfd.cAlphaBits   = 8;
+  pfd.iLayerType   = PFD_MAIN_PLANE;
+  pfd.cDepthBits   = 24;
+  pfd.cStencilBits = 8;
+  // clang-format on
 
-    if (!(g_hRC = wglCreateContext(g_hDC)))
-        throw std::runtime_error("wglCreateContext() failed.");
+  int pixelFormat = ChoosePixelFormat(dummyDC, &pfd);
+  if(!pixelFormat) {
+    throw std::runtime_error("ChoosePixelFormat() failed.");
+  }
+  if(!SetPixelFormat(dummyDC, pixelFormat, &pfd)) {
+    throw std::runtime_error("SetPixelFormat() failed.");
+  }
 
-    if (!wglMakeCurrent(g_hDC, g_hRC))
-        throw std::runtime_error("wglMakeCurrent() failed.");
+  HGLRC dummyContext = wglCreateContext(dummyDC);
+  if(!dummyContext) {
+    throw std::runtime_error("wglCreateContext() failed.");
+  }
 
-    EnableVerticalSync(false);
+  if(!wglMakeCurrent(dummyDC, dummyContext)) {
+    throw std::runtime_error("wglMakeCurrent() failed.");
+  }
 
-    // Check for GL_EXT_texture_filter_anisotropic support.
+  wglCreateContextAttribsARB = (wglCreateContextAttribsARBFunc)wglGetProcAddress("wglCreateContextAttribsARB");
+  wglChoosePixelFormatARB    = (wglChoosePixelFormatARBFunc)wglGetProcAddress("wglChoosePixelFormatARB");
 
-    if (ExtensionSupported("GL_EXT_texture_filter_anisotropic"))
-        glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
-    else
-        g_maxAnisotrophy = 1;
+  wglMakeCurrent(dummyDC, 0);
+  wglDeleteContext(dummyContext);
+  ReleaseDC(dummyWindow, dummyDC);
+  DestroyWindow(dummyWindow);
 }
 
-GLuint LoadTexture(const char *pszFilename)
-{
+void InitGL() {
+  ZoneScoped; // NOLINT
+
+  if(!(g_hDC = GetDC(g_hWnd))) {
+    throw std::runtime_error("GetDC() failed.");
+  }
+
+  InitOpenglExtensions();
+
+  // clang-format off
+  // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
+  constexpr int pixel_format_attribs[] = {
+      WGL_DRAW_TO_WINDOW_ARB,     GL_TRUE,
+      WGL_SUPPORT_OPENGL_ARB,     GL_TRUE,
+      WGL_DOUBLE_BUFFER_ARB,      GL_TRUE,
+      WGL_ACCELERATION_ARB,       WGL_FULL_ACCELERATION_ARB,
+      WGL_PIXEL_TYPE_ARB,         WGL_TYPE_RGBA_ARB,
+      WGL_COLOR_BITS_ARB,         32,
+      WGL_DEPTH_BITS_ARB,         24,
+      WGL_STENCIL_BITS_ARB,       8,
+      0
+  };
+  // clang-format on
+
+  int pixel_format;
+  UINT num_formats;
+  wglChoosePixelFormatARB(g_hDC, pixel_format_attribs, 0, 1, &pixel_format, &num_formats);
+  if (!num_formats) {
+      throw std::runtime_error("wglChoosePixelFormatARB() failed.");
+  }
+
+  PIXELFORMATDESCRIPTOR pfd;
+  DescribePixelFormat(g_hDC, pixel_format, sizeof(pfd), &pfd);
+  if(!SetPixelFormat(g_hDC, pixel_format, &pfd)) {
+      throw std::runtime_error("SetPixelFormat() failed.");
+  }
+
+  constexpr auto WGL_CONTEXT_MAJOR_VERSION_ARB    = 0x2091;
+  constexpr auto WGL_CONTEXT_MINOR_VERSION_ARB    = 0x2092;
+  constexpr auto WGL_CONTEXT_PROFILE_MASK_ARB     = 0x9126;
+  constexpr auto WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
+
+  // clang-format off
+  // Specify that we want to create an OpenGL 3.3 core profile context
+  constexpr int attribs[] = {
+      WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+      WGL_CONTEXT_MINOR_VERSION_ARB, 6,
+      WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+      0,
+  };
+  // clang-format on
+
+  HGLRC context = wglCreateContextAttribsARB(g_hDC, 0, attribs);
+  if(!context) {
+    throw std::runtime_error("wglCreateContextAttribsARB() failed.");
+  }
+
+  if(!wglMakeCurrent(g_hDC, context)) {
+    throw std::runtime_error("wglMakeCurrent() failed.");
+  }
+
+  if(gl3wInit() != GL3W_OK) {
+    throw std::runtime_error("gl3wInit() failed.");
+  }
+
+  EnableVerticalSync(false);
+}
+
+GLuint LoadTexture(const char *pszFilename) {
     ZoneScoped; // NOLINT
     return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR,
         GL_REPEAT, GL_REPEAT);
@@ -659,21 +771,19 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
                 g_maxAnisotrophy);
         }
 
-        gluBuild2DMipmaps(GL_TEXTURE_2D, 4, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+        //gluBuild2DMipmaps(GL_TEXTURE_2D, 4, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
         stbi_image_free(pImage);
     }
 
     return id;
 }
 
-void Log(const char *pszMessage)
-{
+void Log(const char *pszMessage) {
     ZoneScoped; // NOLINT
     MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
 }
 
-void PerformCameraCollisionDetection()
-{
+void PerformCameraCollisionDetection() {
     ZoneScoped; // NOLINT
     const glm::vec3 &pos = g_camera.getPosition();
     glm::vec3 newPos(pos);
@@ -765,8 +875,7 @@ void ProcessUserInput() {
     }
 }
 
-void RenderFloor()
-{
+void RenderFloor() {
     ZoneScoped; // NOLINT
     glActiveTextureARB(GL_TEXTURE0_ARB);
     glEnable(GL_TEXTURE_2D);
@@ -776,7 +885,7 @@ void RenderFloor()
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
 
-    glCallList(g_floorDisplayList);
+    //glCallList(g_floorDisplayList);
 
     glBindTexture(GL_TEXTURE_2D, 0);
     glDisable(GL_TEXTURE_2D);
@@ -790,24 +899,23 @@ void RenderFrame() {
     ZoneScoped; // NOLINT
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
-    glDisable(GL_LIGHTING);
+    //glDisable(GL_LIGHTING);
 
     glViewport(0, 0, g_windowWidth, g_windowHeight);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
+    //glMatrixMode(GL_PROJECTION);
+    //glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
+    //glMatrixMode(GL_MODELVIEW);
+    //glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
 
     RenderFloor();
     RenderText();
 }
 
-void RenderText()
-{
+void RenderText() {
     ZoneScoped; // NOLINT
     std::ostringstream output;
 
@@ -868,14 +976,13 @@ void RenderText()
             << "Press H to display help";
     }
 
-    g_font.begin();
-    g_font.setColor(1.0f, 1.0f, 0.0f);
-    g_font.drawText(1, 1, output.str().c_str());
-    g_font.end();
+    //g_font.begin();
+    //g_font.setColor(1.0f, 1.0f, 0.0f);
+    //g_font.drawText(1, 1, output.str().c_str());
+    //g_font.end();
 }
 
-void SetProcessorAffinity()
-{
+void SetProcessorAffinity() {
     ZoneScoped; // NOLINT
     // Assign the current thread to one processor. This ensures that timing
     // code runs on only one processor, and will not suffer any ill effects
@@ -911,8 +1018,7 @@ void SetProcessorAffinity()
     CloseHandle(hCurrentProcess);
 }
 
-void ToggleFullScreen()
-{
+void ToggleFullScreen() {
     ZoneScoped; // NOLINT
     static DWORD savedExStyle;
     static DWORD savedStyle;

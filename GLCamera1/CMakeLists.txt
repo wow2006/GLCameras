@@ -14,7 +14,6 @@ target_sources(
     WGL_ARB_multisample.cpp
     bitmap.cpp
     camera.cpp
-    gl_font.cpp
     input.cpp
 )
 
@@ -22,6 +21,7 @@ target_link_libraries(
     GLCamera1
     PRIVATE
     glm
+    gl3w::gl3w
     stb::image
     OpenGL::GL
     OpenGL::GLU
