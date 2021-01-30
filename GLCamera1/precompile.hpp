@@ -15,6 +15,9 @@
 #include <fmt/printf.h>
 // gl3w
 #include <GL/gl3w.h>
+// ImGUI
+#include <imgui_impl_win32.h>
+#include <imgui_impl_opengl3.h>
 // OS
 #ifdef _WIN32
 #include <windows.h>

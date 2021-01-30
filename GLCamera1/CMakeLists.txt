@@ -23,6 +23,8 @@ target_link_libraries(
     PRIVATE
     glm
     fmt::fmt
+    Imgui::Win32
+    Imgui::OpenGL
     gl3w::gl3w
     stb::image
     OpenGL::GL

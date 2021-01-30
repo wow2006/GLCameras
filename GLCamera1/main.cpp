@@ -89,6 +89,8 @@ static glm::vec3 g_cameraBoundsMax;
 static glm::vec3 g_cameraBoundsMin;
 static float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 
+static HGLRC g_Context;
+
 static GLuint g_VAO = 0;
 static GLuint g_VBO = 0;
 static GLuint g_EBO = 0;
@@ -112,6 +114,7 @@ bool    Init();
 void    InitApp();
 void    InitOpenglExtensions();
 void    InitGL();
+void    InitImGUI();
 void    LimitFrameRate(float frameRateLimit, float frameTimeSeconds);
 GLuint  LoadTexture(const char *pszFilename);
 GLuint  LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
@@ -121,6 +124,7 @@ void    PerformCameraCollisionDetection();
 void    ProcessUserInput();
 void    RenderFloor();
 void    RenderFrame();
+void    RenderImGUI();
 void    RenderText();
 void    SetProcessorAffinity();
 void    ToggleFullScreen();
@@ -210,8 +214,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     return static_cast<int>(msg.wParam);
 }
 
+// Forward declare message handler from imgui_impl_win32.cpp
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     ZoneScoped; // NOLINT
+
+   if(ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) {
+     return true;
+   }
+
     switch (msg) {
     case WM_ACTIVATE:
         switch (wParam) {
@@ -305,12 +317,12 @@ void CleanupApp() {
 
 HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle) {
     ZoneScoped; // NOLINT
+
     // Create a window that is centered on the desktop. It's exactly 1/4 the
     // size of the desktop. Don't allow it to be resized.
-
     DWORD wndExStyle = WS_EX_OVERLAPPEDWINDOW;
-    DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-                     WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+    DWORD wndStyle   = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
+                       WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
 
     // clang-format off
     HWND hWnd = CreateWindowEx(
@@ -537,10 +549,10 @@ bool Init() {
     try {
         InitGL();
 
-        //if (!ExtensionSupported("GL_ARB_multitexture"))
-        //    throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
+        InitImGUI();
 
         InitApp();
+
         return true;
     } catch (const std::exception &e) {
         std::ostringstream msg;
@@ -738,12 +750,12 @@ void InitGL() {
   };
   // clang-format on
 
-  HGLRC context = wglCreateContextAttribsARB(g_hDC, 0, attribs);
-  if(!context) {
+  g_Context = wglCreateContextAttribsARB(g_hDC, 0, attribs);
+  if(!g_Context) {
     throw std::runtime_error("wglCreateContextAttribsARB() failed.");
   }
 
-  if(!wglMakeCurrent(g_hDC, context)) {
+  if(!wglMakeCurrent(g_hDC, g_Context)) {
     throw std::runtime_error("wglMakeCurrent() failed.");
   }
 
@@ -770,6 +782,17 @@ void InitGL() {
   EnableVerticalSync(false);
 
   glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
+}
+
+void InitImGUI() {
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+
+  ImGui::StyleColorsDark();
+
+  ImGui_ImplWin32_Init(g_hWnd);
+  ImGui_ImplOpenGL3_Init("#version 460 core");
 }
 
 GLuint LoadTexture(const char *pszFilename) {
@@ -912,9 +935,12 @@ void RenderFloor() {
 
   glUseProgram(g_Program);
 
-  constexpr auto PositionID = 0;
-  constexpr auto UV1ID      = 1;
-  constexpr auto UV2ID      = 2;
+  const auto projection = g_camera.getProjectionMatrix();
+  const auto view = g_camera.getViewMatrix();
+  const auto MVP = projection * view;
+
+  static GLint location = glGetUniformLocation(g_Program, "uMVP");
+  glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(MVP));
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
@@ -924,7 +950,12 @@ void RenderFloor() {
   glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
   glUniform1i(glGetUniformLocation(g_Program, "uTexture1"), 1);
 
+  glBindVertexArray(g_VAO);
   glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
+
+  constexpr auto PositionID = 0;
+  constexpr auto UV1ID = 1;
+  constexpr auto UV2ID = 2;
 
   glEnableVertexAttribArray(PositionID);
   glEnableVertexAttribArray(UV1ID);
@@ -944,22 +975,28 @@ void RenderFloor() {
 void RenderFrame() {
   ZoneScoped; // NOLINT
 
-  //glEnable(GL_DEPTH_TEST);
-  //glEnable(GL_CULL_FACE);
+  // Start the Dear ImGui frame
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplWin32_NewFrame();
+  ImGui::NewFrame();
+  {
+    RenderImGUI();
+  }
+  ImGui::Render();
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
 
   glViewport(0, 0, g_windowWidth, g_windowHeight);
   glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  const auto projection = g_camera.getProjectionMatrix();
-  const auto view       = g_camera.getViewMatrix();
-  const auto MVP = projection * view;
-
-  static GLint location = glGetUniformLocation(g_Program, "uMVP");
-  glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(MVP));
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   RenderFloor();
   //RenderText();
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void RenderImGUI() {
+    ImGui::ShowDemoWindow();
 }
 
 void RenderText() {
@@ -1073,8 +1110,7 @@ void ToggleFullScreen() {
 
     g_isFullScreen = !g_isFullScreen;
 
-    if (g_isFullScreen)
-    {
+    if (g_isFullScreen) {
         // Moving to full screen mode.
 
         savedExStyle = GetWindowLong(g_hWnd, GWL_EXSTYLE);
@@ -1115,6 +1151,7 @@ void ToggleFullScreen() {
 
 void UpdateCamera(float elapsedTimeSec) {
     ZoneScoped; // NOLINT
+
     float heading = 0.0f;
     float pitch   = 0.0f;
     float roll    = 0.0f;
