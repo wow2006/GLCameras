@@ -14,6 +14,7 @@ target_sources(
     WGL_ARB_multisample.cpp
     bitmap.cpp
     camera.cpp
+    shaders.cpp
     input.cpp
 )
 
@@ -21,12 +22,30 @@ target_link_libraries(
     GLCamera1
     PRIVATE
     glm
+    fmt::fmt
     gl3w::gl3w
     stb::image
     OpenGL::GL
     OpenGL::GLU
     tracy::tracy
     options::options
+)
+
+target_compile_definitions(
+    GLCamera1
+    PRIVATE
+    OPENG_DEBUG
+)
+
+set_target_properties(
+    GLCamera1
+    PROPERTIES
+    CXX_STANDARD 17
+    CXX_EXTENSIONS OFF
+    CXX_STANDARD_REQUIRED ON
+    C_STANDARD 11
+    C_EXTENSIONS OFF
+    C_STANDARD_REQUIRED ON
 )
 
 target_precompile_headers(

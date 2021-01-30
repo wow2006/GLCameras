@@ -9,6 +9,10 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
+// fmt
+#include <fmt/color.h>
+#include <fmt/printf.h>
 // gl3w
 #include <GL/gl3w.h>
 // OS
@@ -41,4 +45,5 @@ inline double get_time() {
 #include <Tracy.hpp>
 // glm
 #include <glm/glm.hpp>
-#include <glm/ext/matrix_transform.hpp>
+#include <glm/gtx/type_trait.hpp>
+#include <glm/gtc/type_ptr.hpp>

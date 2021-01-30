@@ -32,6 +32,7 @@
 // Internal
 #include "input.h"
 #include "camera.h"
+#include "shaders.hpp"
 
 //-----------------------------------------------------------------------------
 // Constants.
@@ -48,23 +49,19 @@ constexpr auto APP_TITLE = "OpenGL Vector Camera Demo";
 #define PFD_SUPPORT_COMPOSITION 0x00008000
 #endif
 
-// GL_EXT_texture_filter_anisotropic
-constexpr auto GL_TEXTURE_MAX_ANISOTROPY_EXT     = 0x84FE;
-constexpr auto GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF;
+constexpr glm::vec3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
+constexpr float     CAMERA_FOVX = 90.0F;
+constexpr glm::vec3 CAMERA_POS(0.0F, 1.0F, 0.0F);
+constexpr float     CAMERA_SPEED_ROTATION   = 0.2F;
+constexpr float     CAMERA_SPEED_FLIGHT_YAW = 100.0F;
+constexpr glm::vec3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
+constexpr float     CAMERA_ZFAR  = 100.0F;
+constexpr float     CAMERA_ZNEAR = 0.1F;
 
-const glm::vec3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
-const float     CAMERA_FOVX = 90.0F;
-const glm::vec3 CAMERA_POS(0.0F, 1.0F, 0.0F);
-const float     CAMERA_SPEED_ROTATION   = 0.2F;
-const float     CAMERA_SPEED_FLIGHT_YAW = 100.0F;
-const glm::vec3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
-const float     CAMERA_ZFAR  = 100.0F;
-const float     CAMERA_ZNEAR = 0.1F;
-
-const float FLOOR_WIDTH  = 16.0F;
-const float FLOOR_HEIGHT = 16.0F;
-const float FLOOR_TILE_S = 8.0F;
-const float FLOOR_TILE_T = 8.0F;
+constexpr float FLOOR_WIDTH  = 16.0F;
+constexpr float FLOOR_HEIGHT = 16.0F;
+constexpr float FLOOR_TILE_S = 8.0F;
+constexpr float FLOOR_TILE_T = 8.0F;
 
 //-----------------------------------------------------------------------------
 // Globals.
@@ -86,12 +83,16 @@ static bool      g_displayHelp;
 static bool      g_flightModeEnabled;
 static GLuint    g_floorColorMapTexture;
 static GLuint    g_floorLightMapTexture;
-static GLuint    g_floorDisplayList;
 //static GLFont    g_font;
 static Camera    g_camera;
 static glm::vec3 g_cameraBoundsMax;
 static glm::vec3 g_cameraBoundsMin;
 static float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
+
+static GLuint g_VAO = 0;
+static GLuint g_VBO = 0;
+static GLuint g_EBO = 0;
+static GLuint g_Program = 0;
 
 wglCreateContextAttribsARBFunc wglCreateContextAttribsARB;
 wglChoosePixelFormatARBFunc    wglChoosePixelFormatARB;
@@ -127,6 +128,8 @@ void    UpdateCamera(float elapsedTimeSec);
 void    UpdateFrame(float elapsedTimeSec);
 void    UpdateFrameRate(float elapsedTimeSec);
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void createBuffers();
+void createProgram();
 
 //-----------------------------------------------------------------------------
 // Functions.
@@ -248,15 +251,12 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-void Cleanup()
-{
+void Cleanup() {
     ZoneScoped; // NOLINT
     CleanupApp();
 
-    if (g_hDC)
-    {
-        if (g_hRC)
-        {
+    if (g_hDC) {
+        if (g_hRC) {
             wglMakeCurrent(g_hDC, 0);
             wglDeleteContext(g_hRC);
             g_hRC = 0;
@@ -267,26 +267,39 @@ void Cleanup()
     }
 }
 
-void CleanupApp()
-{
+void CleanupApp() {
     ZoneScoped; // NOLINT
     //g_font.destroy();
 
-    if (g_floorColorMapTexture)
-    {
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (g_floorColorMapTexture) {
         glDeleteTextures(1, &g_floorColorMapTexture);
         g_floorColorMapTexture = 0;
     }
 
-    if (g_floorLightMapTexture)
-    {
+    if (g_floorLightMapTexture) {
         glDeleteTextures(1, &g_floorLightMapTexture);
         g_floorLightMapTexture = 0;
     }
 
-    if (g_floorDisplayList) {
-        //glDeleteLists(g_floorDisplayList, 1);
-        g_floorDisplayList = 0;
+    glBindVertexArray(0);
+    if(g_VAO != 0) {
+        glDeleteVertexArrays(1, &g_VAO);
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    if(g_VBO != 0) {
+        glDeleteBuffers(1, &g_VBO);
+    }
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    if(g_EBO) {
+      glDeleteBuffers(1, &g_EBO);
+    }
+
+    glUseProgram(0);
+    if(g_Program) {
+        glDeleteProgram(g_Program);
     }
 }
 
@@ -541,60 +554,43 @@ bool Init() {
 }
 
 void InitApp() {
-    ZoneScoped; // NOLINT
+  ZoneScoped; // NOLINT
 
-    // Setup fonts.
-    //if (!g_font.create("Arial", 10, GLFont::BOLD)) {
-    //    throw std::runtime_error("Failed to create font.");
-    //}
+  // Setup fonts.
+  //if (!g_font.create("Arial", 10, GLFont::BOLD)) {
+  //    throw std::runtime_error("Failed to create font.");
+  //}
 
-    // Load textures.
+  // Load textures.
+  if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg"))) {
+    throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
+  }
 
-    if (!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg")))
-        throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
+  if(!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg"))) {
+    throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
+  }
 
-    if (!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg")))
-        throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
+  // Setup camera.
+  g_camera.perspective(
+    CAMERA_FOVX,
+    static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
+    CAMERA_ZNEAR,
+    CAMERA_ZFAR
+  );
 
-    // Setup camera.
+  g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
+  g_camera.setPosition(CAMERA_POS);
+  g_camera.setAcceleration(CAMERA_ACCELERATION);
+  g_camera.setVelocity(CAMERA_VELOCITY);
 
-    g_camera.perspective(CAMERA_FOVX,
-        static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-        CAMERA_ZNEAR, CAMERA_ZFAR);
+  g_cameraBoundsMax = {FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f};
+  g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0f, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0f};
 
-    g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
-    g_camera.setPosition(CAMERA_POS);
-    g_camera.setAcceleration(CAMERA_ACCELERATION);
-    g_camera.setVelocity(CAMERA_VELOCITY);
+  Mouse::instance().hideCursor(true);
+  Mouse::instance().moveToWindowCenter();
 
-    g_cameraBoundsMax = {FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f};
-    g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0f, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0f};
-
-    Mouse::instance().hideCursor(true);
-    Mouse::instance().moveToWindowCenter();
-
-    // Setup display list for the floor.
-
-    //g_floorDisplayList = glGenLists(1);
-    //glNewList(g_floorDisplayList, GL_COMPILE);
-    //glBegin(GL_QUADS);
-    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);
-    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
-    //    glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
-    //
-    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0f);
-    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 0.0f);
-    //    glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
-    //
-    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
-    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 1.0f);
-    //    glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-    //
-    //    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
-    //    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 1.0f);
-    //    glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-    //glEnd();
-    //glEndList();
+  createBuffers();
+  createProgram();
 }
 
 void InitOpenglExtensions() {
@@ -723,7 +719,11 @@ void InitGL() {
   constexpr auto WGL_CONTEXT_MAJOR_VERSION_ARB    = 0x2091;
   constexpr auto WGL_CONTEXT_MINOR_VERSION_ARB    = 0x2092;
   constexpr auto WGL_CONTEXT_PROFILE_MASK_ARB     = 0x9126;
+  constexpr auto WGL_CONTEXT_FLAGS_ARB            = 0x2094;
   constexpr auto WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
+
+  constexpr auto WGL_CONTEXT_DEBUG_BIT_ARB              = 0x0001;
+  constexpr auto WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
 
   // clang-format off
   // Specify that we want to create an OpenGL 3.3 core profile context
@@ -731,6 +731,9 @@ void InitGL() {
       WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
       WGL_CONTEXT_MINOR_VERSION_ARB, 6,
       WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+#ifdef OPENG_DEBUG
+      WGL_CONTEXT_FLAGS_ARB       ,  WGL_CONTEXT_DEBUG_BIT_ARB,
+#endif
       0,
   };
   // clang-format on
@@ -748,11 +751,30 @@ void InitGL() {
     throw std::runtime_error("gl3wInit() failed.");
   }
 
+#ifdef OPENG_DEBUG
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
+                            GLenum severity, GLsizei length, const GLchar *message,
+                            const void *userParam) {
+      static FILE* pLogging = fopen("Logging.txt", "w");
+      fprintf(pLogging,
+              "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+              (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+              type,
+              severity,
+              message);
+    }, 0);
+#endif
+
   EnableVerticalSync(false);
+
+  glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
 }
 
 GLuint LoadTexture(const char *pszFilename) {
     ZoneScoped; // NOLINT
+
     return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR,
         GL_REPEAT, GL_REPEAT);
 }
@@ -760,6 +782,7 @@ GLuint LoadTexture(const char *pszFilename) {
 GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
                    GLint wrapS, GLint wrapT) {
     ZoneScoped; // NOLINT
+
     GLuint id = 0;
     int width, height, channels;
     stbi_set_flip_vertically_on_load(1);
@@ -769,17 +792,18 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
 
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
-
-        if (g_maxAnisotrophy > 1) {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                g_maxAnisotrophy);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,     wrapS);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,     wrapT);
+        if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
+          glGenerateMipmap(GL_TEXTURE_2D);
         }
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
+        glBindTexture(GL_TEXTURE_2D, 0);
 
-        //gluBuild2DMipmaps(GL_TEXTURE_2D, 4, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
         stbi_image_free(pImage);
     }
 
@@ -886,40 +910,53 @@ void ProcessUserInput() {
 void RenderFloor() {
   ZoneScoped; // NOLINT
 
+  glUseProgram(g_Program);
+
+  constexpr auto PositionID = 0;
+  constexpr auto UV1ID      = 1;
+  constexpr auto UV2ID      = 2;
+
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
+  glUniform1i(glGetUniformLocation(g_Program, "uTexture0"), 0);
 
   glActiveTexture(GL_TEXTURE1);
-  glEnable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
+  glUniform1i(glGetUniformLocation(g_Program, "uTexture1"), 1);
 
-  //glCallList(g_floorDisplayList);
+  glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
 
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glDisable(GL_TEXTURE_2D);
+  glEnableVertexAttribArray(PositionID);
+  glEnableVertexAttribArray(UV1ID);
+  glEnableVertexAttribArray(UV2ID);
 
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glDisable(GL_TEXTURE_2D);
+  const auto offset1 = (GLvoid *)(4 * sizeof(glm::vec3));
+  const auto offset2 = (GLvoid *)(4 * sizeof(glm::vec3) + 4 * sizeof(glm::vec2));
+
+  glVertexAttribPointer(PositionID, 3, GL_FLOAT, GL_FALSE, 0, 0);
+  glVertexAttribPointer(UV1ID,      2, GL_FLOAT, GL_FALSE, 0, offset1);
+  glVertexAttribPointer(UV2ID,      2, GL_FLOAT, GL_FALSE, 0, offset2 );
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_EBO);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
 }
 
 void RenderFrame() {
   ZoneScoped; // NOLINT
 
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_CULL_FACE);
-  //glDisable(GL_LIGHTING);
+  //glEnable(GL_DEPTH_TEST);
+  //glEnable(GL_CULL_FACE);
 
   glViewport(0, 0, g_windowWidth, g_windowHeight);
   glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT);
 
-  //glMatrixMode(GL_PROJECTION);
-  //glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
+  const auto projection = g_camera.getProjectionMatrix();
+  const auto view       = g_camera.getViewMatrix();
+  const auto MVP = projection * view;
 
-  //glMatrixMode(GL_MODELVIEW);
-  //glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
+  static GLint location = glGetUniformLocation(g_Program, "uMVP");
+  glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(MVP));
 
   RenderFloor();
   //RenderText();
@@ -1123,6 +1160,7 @@ void UpdateFrame(float elapsedTimeSec) {
 
 void UpdateFrameRate(float elapsedTimeSec) {
     ZoneScoped; // NOLINT
+
     static float accumTimeSec = 0.0f;
     static int frames = 0;
 
@@ -1136,4 +1174,114 @@ void UpdateFrameRate(float elapsedTimeSec) {
     } else {
         ++frames;
     }
+}
+
+void createBuffers() {
+  ZoneScoped;  // NOLINT
+
+  glGenVertexArrays(1, &g_VAO);
+  glBindVertexArray(g_VAO);
+
+  // clang-format off
+  constexpr std::array<uint16_t, 6>  elements = {
+      3, 1, 0,
+      3, 2, 1
+  };
+  constexpr std::array<glm::vec3, 4> vertices = {
+    glm::vec3(-FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F),
+    glm::vec3( FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F),
+    glm::vec3( FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F),
+    glm::vec3(-FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F),
+  };
+  constexpr std::array<glm::vec2, 4> uvs0     = {
+    glm::vec2(0.0F,         0.0F),
+    glm::vec2(FLOOR_TILE_S, 0.0F),
+    glm::vec2(FLOOR_TILE_S, FLOOR_TILE_T),
+    glm::vec2(0.00F,        FLOOR_TILE_T),
+  };
+  constexpr std::array<glm::vec2, 4> uvs1     = {
+    glm::vec2(0.0F, 0.0F),
+    glm::vec2(1.0F, 0.0F),
+    glm::vec2(1.0F, 1.0F),
+    glm::vec2(0.0F, 1.0F),
+  };
+
+  constexpr auto verteicesSize = vertices.size() * sizeof(glm::vec3);
+  constexpr auto uvs0Size      = uvs0.size()     * sizeof(glm::vec2);
+  constexpr auto uvs1Size      = uvs1.size()     * sizeof(glm::vec2);
+  constexpr auto totalSize     = verteicesSize + uvs0Size + uvs1Size;
+
+  glGenBuffers(1, &g_VBO);
+  glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
+  glBufferData(GL_ARRAY_BUFFER, totalSize, nullptr, GL_STATIC_DRAW);
+  glBufferSubData(GL_ARRAY_BUFFER, 0,                        verteicesSize, vertices.data());
+  glBufferSubData(GL_ARRAY_BUFFER, verteicesSize,            uvs0Size,      uvs0.data());
+  glBufferSubData(GL_ARRAY_BUFFER, verteicesSize + uvs0Size, uvs1Size,      uvs1.data());
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  // clang-format on
+
+  glGenBuffers(1, &g_EBO);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_EBO);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, elements.size() * sizeof(uint16_t), elements.data(), GL_STATIC_DRAW);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void createProgram() {
+  ZoneScoped;  // NOLINT
+
+  constexpr std::string_view VertexShader   = R"(
+  #version 460 core
+
+  layout(location=0) in vec3 aPosition;
+  layout(location=1) in vec2 aUV0;
+  layout(location=2) in vec2 aUV1;
+
+  uniform mat4 uMVP;
+
+  out Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } OUT;
+
+  void main() {
+    OUT.wUV0 = aUV0;
+    OUT.wUV1 = aUV1;
+    gl_Position = uMVP * vec4(aPosition, 1);
+  }
+  )";
+  constexpr std::string_view FragmentShader = R"(
+  #version 460 core
+
+  in Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } IN;
+
+  layout(binding=0) uniform sampler2D uTexture0;
+  layout(binding=1) uniform sampler2D uTexture1;
+  layout(location=0) out vec4 out_Color;
+
+  void main() {
+    out_Color = texture(uTexture0, IN.wUV0) * texture(uTexture1, IN.wUV1);
+  }
+  )";
+
+  const auto vertexShader   = Shaders::createShader(GL_VERTEX_SHADER,   VertexShader.data());
+  if(vertexShader == -1) {
+      std::exit(EXIT_FAILURE);
+  }
+
+  const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());
+  if(fragmentShader == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+
+  g_Program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(g_Program == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  glDeleteShader(vertexShader);
+  glDeleteShader(fragmentShader);
+
+  glUseProgram(g_Program);
 }
