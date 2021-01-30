@@ -10,9 +10,13 @@ list(
 include(options)
 include(download_file)
 
+# TODO(Hussein): Removed when use SDL2
+set(BUILD_WIN32 ON)
+
 find_package(fmt    REQUIRED)
 find_package(glm    REQUIRED)
 find_package(gl3w   REQUIRED)
+find_package(imgui  REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(tracy  REQUIRED)
 find_package(stb    REQUIRED COMPONENTS image truetype)
