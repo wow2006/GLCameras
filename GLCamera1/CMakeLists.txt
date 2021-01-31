@@ -10,8 +10,6 @@ target_sources(
     GLCamera1
     PRIVATE
     main.cpp
-    GL_ARB_multitexture.cpp
-    WGL_ARB_multisample.cpp
     bitmap.cpp
     camera.cpp
     shaders.cpp
