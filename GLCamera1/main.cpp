@@ -757,6 +757,7 @@ void InitGL() {
   glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
                             GLenum severity, GLsizei length, const GLchar *message,
                             const void *userParam) {
+    /*
       static FILE* pLogging = fopen("Logging.txt", "w");
       fprintf(pLogging,
               "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
@@ -764,6 +765,7 @@ void InitGL() {
               type,
               severity,
               message);
+    */
     }, 0);
 #endif
 

@@ -10,7 +10,6 @@ target_sources(
     GLCamera1
     PRIVATE
     main.cpp
-    bitmap.cpp
     camera.cpp
     shaders.cpp
     input.cpp
@@ -32,7 +31,7 @@ target_link_libraries(
 target_compile_definitions(
     GLCamera1
     PRIVATE
-    OPENG_DEBUG
+    #OPENG_DEBUG
 )
 
 set_target_properties(

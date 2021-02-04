@@ -1,5 +1,6 @@
 // STL
 #include <cmath>
+#include <array>
 #include <string>
 #include <thread>
 #include <vector>

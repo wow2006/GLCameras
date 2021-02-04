@@ -147,12 +147,12 @@ public:
     { return (m_pCurrKeyStates[key] & 0x80) ? false : true; }
 
     bool keyPressed(Key key) const
-    { 
+    {
         return ((m_pCurrKeyStates[key] & 0x80)
             && !(m_pPrevKeyStates[key] & 0x80)) ? true : false;
     }
 
-    void handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);   
+    void handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     void update();
 
 private:
@@ -204,7 +204,7 @@ public:
 
     int yPos() const
     { return m_ptCurrentPos.y; }
-        
+
     float weightModifier() const
     { return m_weightModifier; }
 

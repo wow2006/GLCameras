@@ -235,10 +235,13 @@ void Mouse::hideCursor(bool hide)
     }
 }
 
-void Mouse::moveTo(UINT x, UINT y)
-{
+void Mouse::moveTo(uint32_t x, uint32_t y) {
     ZoneScoped; // NOLINT
-    POINT ptScreen = {x, y};
+
+    POINT ptScreen = {
+        static_cast<long>(x),
+        static_cast<long>(y)
+    };
 
     ClientToScreen(m_hWnd, &ptScreen);
     SetCursorPos(ptScreen.x, ptScreen.y);
