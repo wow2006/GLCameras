@@ -128,8 +128,8 @@ void    UpdateCamera(float elapsedTimeSec);
 void    UpdateFrame(float elapsedTimeSec);
 void    UpdateFrameRate(float elapsedTimeSec);
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-void createBuffers();
-void createProgram();
+void    createBuffers();
+void    createProgram();
 
 //-----------------------------------------------------------------------------
 // Functions.
@@ -918,11 +918,13 @@ void RenderFloor() {
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
-  glUniform1i(glGetUniformLocation(g_Program, "uTexture0"), 0);
+  static auto uTexture0Locaion = glGetUniformLocation(g_Program, "uTexture0");
+  glUniform1i(uTexture0Locaion, 0);
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
-  glUniform1i(glGetUniformLocation(g_Program, "uTexture1"), 1);
+  static auto uTexture1Locaion = glGetUniformLocation(g_Program, "uTexture1");
+  glUniform1i(uTexture1Locaion, 1);
 
   glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
 
@@ -1226,6 +1228,8 @@ void createBuffers() {
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
+void createUniformBuffers() {}
+
 void createProgram() {
   ZoneScoped;  // NOLINT
 
@@ -1236,7 +1240,7 @@ void createProgram() {
   layout(location=1) in vec2 aUV0;
   layout(location=2) in vec2 aUV1;
 
-  uniform mat4 uMVP;
+  layout(location=0) uniform mat4 uMVP;
 
   out Interpolants {
     vec2 wUV0;
@@ -1257,8 +1261,9 @@ void createProgram() {
     vec2 wUV1;
   } IN;
 
-  layout(binding=0) uniform sampler2D uTexture0;
-  layout(binding=1) uniform sampler2D uTexture1;
+  layout(binding=1) uniform sampler2D uTexture0;
+  layout(binding=2) uniform sampler2D uTexture1;
+
   layout(location=0) out vec4 out_Color;
 
   void main() {
