@@ -46,11 +46,10 @@ Keyboard::Keyboard()
 
 Keyboard::~Keyboard() {}
 
-void Keyboard::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
+void Keyboard::handleMsg([[maybe_unused]] HWND hWnd, UINT msg, WPARAM wParam, [[maybe_unused]] LPARAM lParam) {
     ZoneScoped; // NOLINT
-    switch (msg)
-    {
+
+    switch (msg) {
     case WM_CHAR:
         m_lastChar = static_cast<int>(wParam);
         break;
@@ -202,11 +201,10 @@ void Mouse::performMouseFiltering(float x, float y)
     m_filtered[1] = averageY / averageTotal;
 }
 
-void Mouse::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
+void Mouse::handleMsg([[maybe_unused]] HWND hWnd, UINT msg, WPARAM wParam, [[maybe_unused]] LPARAM lParam) {
     ZoneScoped; // NOLINT
-    switch (msg)
-    {
+
+    switch (msg) {
     default:
         break;
 
@@ -246,15 +244,16 @@ void Mouse::moveTo(uint32_t x, uint32_t y) {
     ClientToScreen(m_hWnd, &ptScreen);
     SetCursorPos(ptScreen.x, ptScreen.y);
 
-    m_ptCurrentPos.x = x;
-    m_ptCurrentPos.y = y;
+    m_ptCurrentPos.x = static_cast<long>(x);
+    m_ptCurrentPos.y = static_cast<long>(y);
 }
 
-void Mouse::moveToWindowCenter()
-{
+void Mouse::moveToWindowCenter() {
     ZoneScoped; // NOLINT
+
     if (m_ptWindowCenterPos.x != 0 && m_ptWindowCenterPos.y != 0)
-        moveTo(m_ptWindowCenterPos.x, m_ptWindowCenterPos.y);
+        moveTo(static_cast<uint32_t>(m_ptWindowCenterPos.x),
+               static_cast<uint32_t>(m_ptWindowCenterPos.y));
     else
         m_moveToWindowCenterPending = true;
 }

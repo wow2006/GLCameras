@@ -135,7 +135,7 @@ void    createProgram();
 // Functions.
 //-----------------------------------------------------------------------------
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+int WINAPI WinMain(HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstance, [[maybe_unused]] LPSTR lpCmdLine, int nShowCmd) {
 #if defined _DEBUG
     _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
@@ -419,34 +419,35 @@ float GetElapsedTimeInSeconds() {
     INT64 time = 0;
     float elapsedTimeSec = 0.0f;
 
-    if (!initialized)
-    {
+    if (!initialized) {
         initialized = true;
         QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER*>(&freq));
         QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&lastTime));
-        timeScale = 1.0f / freq;
+        timeScale = 1.0F / static_cast<float>(freq);
     }
 
     QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&time));
-    elapsedTimeSec = (time - lastTime) * timeScale;
+    elapsedTimeSec = static_cast<float>(time - lastTime) * timeScale;
     lastTime = time;
 
-    if (fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0f)
-    {
+    if (fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0F) {
         memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
         frameTimes[0] = elapsedTimeSec;
 
-        if (sampleCount < MAX_SAMPLE_COUNT)
+        if (sampleCount < MAX_SAMPLE_COUNT) {
             ++sampleCount;
+        }
     }
 
     actualElapsedTimeSec = 0.0f;
 
-    for (int i = 0; i < sampleCount; ++i)
+    for (int i = 0; i < sampleCount; ++i) {
         actualElapsedTimeSec += frameTimes[i];
+    }
 
-    if (sampleCount > 0)
-        actualElapsedTimeSec /= sampleCount;
+    if (sampleCount > 0) {
+        actualElapsedTimeSec /= static_cast<float>(sampleCount);
+    }
 
     return actualElapsedTimeSec;
 }
@@ -562,11 +563,13 @@ void InitApp() {
   //}
 
   // Load textures.
-  if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg"))) {
+  g_floorColorMapTexture = LoadTexture("floor_color_map.jpg");
+  if(!g_floorColorMapTexture) {
     throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
   }
 
-  if(!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg"))) {
+  g_floorLightMapTexture = LoadTexture("floor_light_map.jpg");
+  if(!g_floorLightMapTexture) {
     throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
   }
 
@@ -671,7 +674,8 @@ void InitOpenglExtensions() {
 void InitGL() {
   ZoneScoped; // NOLINT
 
-  if(!(g_hDC = GetDC(g_hWnd))) {
+  g_hDC = GetDC(g_hWnd);
+  if(!g_hDC) {
     throw std::runtime_error("GetDC() failed.");
   }
 
@@ -891,8 +895,9 @@ void ProcessUserInput() {
     if (keyboard.keyPressed(Keyboard::KEY_COMMA)) {
         mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
 
-        if (mouse.weightModifier() < 0.0f)
+        if (mouse.weightModifier() < 0.0f) {
             mouse.setWeightModifier(0.0f);
+        }
     }
 
     if (keyboard.keyPressed(Keyboard::KEY_SPACE)) {
@@ -1077,12 +1082,11 @@ void ToggleFullScreen() {
 
     g_isFullScreen = !g_isFullScreen;
 
-    if (g_isFullScreen)
-    {
+    if (g_isFullScreen) {
         // Moving to full screen mode.
 
-        savedExStyle = GetWindowLong(g_hWnd, GWL_EXSTYLE);
-        savedStyle = GetWindowLong(g_hWnd, GWL_STYLE);
+        savedExStyle = static_cast<DWORD>(GetWindowLong(g_hWnd, GWL_EXSTYLE));
+        savedStyle   = static_cast<DWORD>(GetWindowLong(g_hWnd, GWL_STYLE));
         GetWindowRect(g_hWnd, &rcSaved);
 
         SetWindowLong(g_hWnd, GWL_EXSTYLE, 0);
@@ -1095,13 +1099,11 @@ void ToggleFullScreen() {
 
         SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0,
             g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    }
-    else
-    {
+    } else {
         // Moving back to windowed mode.
 
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, savedExStyle);
-        SetWindowLong(g_hWnd, GWL_STYLE, savedStyle);
+        SetWindowLong(g_hWnd, GWL_EXSTYLE, static_cast<LONG>(savedExStyle));
+        SetWindowLong(g_hWnd, GWL_STYLE,   static_cast<LONG>(savedStyle));
         SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
 
@@ -1224,10 +1226,9 @@ void createBuffers() {
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   // clang-format on
 
-  glGenBuffers(1, &g_EBO);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_EBO);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, elements.size() * sizeof(uint16_t), elements.data(), GL_STATIC_DRAW);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  constexpr auto ElementsSize = static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t));
+  glCreateBuffers(1, &g_EBO);
+  glNamedBufferData(g_EBO, ElementsSize, elements.data(), GL_STATIC_DRAW);
 }
 
 void createUniformBuffers() {}
@@ -1273,7 +1274,7 @@ void createProgram() {
   }
   )";
 
-  const auto vertexShader   = Shaders::createShader(GL_VERTEX_SHADER,   VertexShader.data());
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER,   VertexShader.data());
   if(vertexShader == -1) {
       std::exit(EXIT_FAILURE);
   }
@@ -1283,12 +1284,13 @@ void createProgram() {
     std::exit(EXIT_FAILURE);
   }
 
-  g_Program = Shaders::createProgram(vertexShader, fragmentShader);
-  if(g_Program == -1) {
+  const auto program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(program == -1) {
     std::exit(EXIT_FAILURE);
   }
-  glDeleteShader(vertexShader);
-  glDeleteShader(fragmentShader);
+  glDeleteShader(static_cast<GLuint>(vertexShader));
+  glDeleteShader(static_cast<GLuint>(fragmentShader));
 
+  g_Program = static_cast<GLuint>(program);
   glUseProgram(g_Program);
 }

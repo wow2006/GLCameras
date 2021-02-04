@@ -7,7 +7,7 @@ inline constexpr auto MessageLength = 512;
 
 namespace Shaders {
 
-GLuint createShader(GLenum type, const char *shaderSource) {
+GLint createShader(GLenum type, const char *shaderSource) {
   const GLuint shaderID = glCreateShader(type);
 
   glShaderSource(shaderID, 1, &shaderSource, nullptr);
@@ -25,18 +25,18 @@ GLuint createShader(GLenum type, const char *shaderSource) {
 #endif
     return InvalidShader;
   }
-  return shaderID;
+  return static_cast<GLint>(shaderID);
 }
 
-GLuint createProgram(GLuint vertexShaderID, GLuint fragmentShaderID) {
+GLint createProgram(GLint vertexShaderID, GLint fragmentShaderID) {
   if(vertexShaderID == InvalidShader || fragmentShaderID == InvalidShader) {
     fmt::print(fg(fmt::color::red), "ERROR: Invalid shaders\n");
     return InvalidProgram;
   }
 
   const auto programID = glCreateProgram();
-  glAttachShader(programID, vertexShaderID);
-  glAttachShader(programID, fragmentShaderID);
+  glAttachShader(programID, static_cast<GLuint>(vertexShaderID));
+  glAttachShader(programID, static_cast<GLuint>(fragmentShaderID));
   glLinkProgram(programID);
 
   // Check the program
@@ -50,9 +50,9 @@ GLuint createProgram(GLuint vertexShaderID, GLuint fragmentShaderID) {
 #else
     MessageBoxA(NULL, message.data(), "Error", MB_OK | MB_ICONEXCLAMATION);
 #endif
-    return programID;
+    return InvalidProgram;
   }
-  return programID;
+  return static_cast<GLint>(programID);
 }
 
 }  // namespace Shaders

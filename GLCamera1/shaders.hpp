@@ -2,9 +2,9 @@
 
 namespace Shaders {
 
-GLuint createShader(GLenum type, const char *shaderSource);
+GLint createShader(GLenum type, const char *shaderSource);
 
-GLuint createProgram(GLuint vertexShaderID, GLuint fragmentShaderID);
+GLint createProgram(GLint vertexShaderID, GLint fragmentShaderID);
 
 }  // namespace Shaders
 

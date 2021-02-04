@@ -14,7 +14,7 @@ target_compile_options(
   INTERFACE
   $<$<CXX_COMPILER_ID:Clang>:-Weverything;-Wno-c++98-compat-pedantic;-fcolor-diagnostics;-Wno-unused-macros;-Wno-padded>
   $<$<CXX_COMPILER_ID:GNU>:-Wall;-W;-Wpedantic;-Wshadow;-Wnon-virtual-dtor;-Wold-style-cast;-Wunused;-Wformat=2;-fdiagnostics-color=always>
-  $<$<CXX_COMPILER_ID:MSVC>:/Wall;/permissive->
+  $<$<CXX_COMPILER_ID:MSVC>:/Wall;/permissive-;/wd4514;/wd4820;/wd4191;/wd5045>
 )
 
 target_link_options(
