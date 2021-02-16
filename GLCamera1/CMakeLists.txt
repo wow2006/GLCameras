@@ -21,6 +21,8 @@ target_link_libraries(
     glm
     fmt::fmt
     glbinding::glbinding
+    Imgui::OpenGL
+    Imgui::Win32
     stb::image
     OpenGL::GL
     OpenGL::GLU

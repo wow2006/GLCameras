@@ -116,6 +116,7 @@ bool    Init();
 void    InitApp();
 void    InitOpenglExtensions();
 void    InitGL();
+void    InitImgui();
 GLuint  LoadTexture(const char *pszFilename);
 GLuint  LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter,
                     GLenum wrapS, GLenum wrapT);
@@ -258,6 +259,11 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 void Cleanup() {
     ZoneScoped; // NOLINT
     CleanupApp();
+
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
 
     if (g_hDC) {
         if(g_hContext) {
@@ -660,6 +666,18 @@ void InitGL() {
   EnableVerticalSync(false);
 
   glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
+
+  InitImgui();
+}
+
+void InitImgui() {
+    // Setup Dear ImGui binding
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+    ImGui_ImplWin32_Init(g_hWnd);
+    ImGui_ImplOpenGL3_Init();
 }
 
 void InitApp() {
@@ -948,6 +966,16 @@ void RenderFloor() {
 void RenderFrame() {
   ZoneScoped; // NOLINT
 
+  // Start the ImGui frame
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplWin32_NewFrame();
+  ImGui::NewFrame();
+
+  { // Imgui
+    ImGui::ShowDemoWindow();
+  }
+  ImGui::Render();
+
   //glEnable(GL_DEPTH_TEST);
   //glEnable(GL_CULL_FACE);
 
@@ -964,6 +992,8 @@ void RenderFrame() {
 
   RenderFloor();
   //RenderText();
+
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void RenderText() {
