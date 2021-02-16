@@ -671,6 +671,8 @@ void InitGL() {
 }
 
 void InitImgui() {
+    ZoneScoped;  // NOLINT
+
     // Setup Dear ImGui binding
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -972,7 +974,7 @@ void RenderFrame() {
   ImGui::NewFrame();
 
   { // Imgui
-    ImGui::ShowDemoWindow();
+    RenderText();
   }
   ImGui::Render();
 
@@ -998,62 +1000,78 @@ void RenderFrame() {
 
 void RenderText() {
     ZoneScoped; // NOLINT
-    std::ostringstream output;
 
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(g_windowWidth/2, g_windowHeight));
+    ImGui::Begin("Text", nullptr, ImGuiWindowFlags_NoBackground |
+                                  ImGuiWindowFlags_NoTitleBar   |
+                                  ImGuiWindowFlags_NoResize     |
+                                  ImGuiWindowFlags_NoSavedSettings);
     if (g_displayHelp) {
-        output
-            << "First person camera behavior" << std::endl
-            << "  Press W and S to move forwards and backwards" << std::endl
-            << "  Press A and D to strafe left and right" << std::endl
-            << "  Press E and Q to move up and down" << std::endl
-            << "  Move mouse to free look" << std::endl
-            << std::endl
-            << "Flight camera behavior" << std::endl
-            << "  Press W and S to move forwards and backwards" << std::endl
-            << "  Press A and D to yaw left and right" << std::endl
-            << "  Press E and Q to move up and down" << std::endl
-            << "  Move mouse to pitch and roll" << std::endl
-            << std::endl
-            << "Press M to enable/disable mouse smoothing" << std::endl
-            << "Press V to enable/disable vertical sync" << std::endl
-            << "Press + and - to change camera rotation speed" << std::endl
-            << "Press , and . to change mouse sensitivity" << std::endl
-            << "Press SPACE to toggle between flight and first person behavior" << std::endl
-            << "Press ALT and ENTER to toggle full screen" << std::endl
-            << "Press ESC to exit" << std::endl
-            << std::endl
-            << "Press H to hide help";
+        ImGui::Text("%s", R"(First person camera behavior
+  Press W and S to move forwards and backwards
+  Press A and D to strafe left and right
+  Press E and Q to move up and down
+  Move mouse to free look
+
+Flight camera behavior
+  Press W and S to move forwards and backwards
+  Press A and D to yaw left and right
+  Press E and Q to move up and down
+  Move mouse to pitch and roll
+
+Press M to enable/disable mouse smoothing
+Press V to enable/disable vertical sync
+Press + and - to change camera rotation speed
+Press , and . to change mouse sensitivity
+Press SPACE to toggle between flight and first person behavior
+Press ALT and ENTER to toggle full screen
+Press ESC to exit
+
+Press H to hide help)");
     } else {
         Mouse &mouse = Mouse::instance();
+        const auto output = fmt::format(
+R"(FPS: {}
+Multisample anti-aliasing: {} x
+Anisotropic filtering: {} x
+Vertical sync: {}
 
-        output.setf(std::ios::fixed, std::ios::floatfield);
-        output << std::setprecision(2);
+Camera
+  Position:
+ x: {}
+ y: {}
+ z: {}
+  Velocity:
+ x: {}
+ y: {}
+ z: {}
+  Rotation speed: {}
+  Behavior: {}
 
-        output
-            << "FPS: " << g_framesPerSecond << std::endl
-            << "Multisample anti-aliasing: " << g_msaaSamples << "x" << std::endl
-            << "Anisotropic filtering: " << g_maxAnisotrophy << "x" << std::endl
-            << "Vertical sync: " << (g_enableVerticalSync ? "enabled" : "disabled") << std::endl
-            << std::endl
-            << "Camera" << std::endl
-            << "  Position:"
-            << " x:" << g_camera.getPosition().x
-            << " y:" << g_camera.getPosition().y
-            << " z:" << g_camera.getPosition().z << std::endl
-            << "  Velocity:"
-            << " x:" << g_camera.getCurrentVelocity().x
-            << " y:" << g_camera.getCurrentVelocity().y
-            << " z:" << g_camera.getCurrentVelocity().z << std::endl
-            << "  Rotation speed: " << g_cameraRotationSpeed << std::endl
-            << "  Behavior: " << (g_flightModeEnabled ? "Flight" : "First person") << std::endl
-            << std::endl
-            << "Mouse" << std::endl
-            << "  Smoothing: " << (mouse.isMouseSmoothing() ? "enabled" : "disabled") << std::endl
-            << "  Sensitivity: " << mouse.weightModifier() << std::endl
-            << std::endl
-            << "Press H to display help";
+Mouse
+  Smoothing: {}
+  Sensitivity: {}
+
+Press H to display help)",
+          g_framesPerSecond,
+          g_msaaSamples,
+          g_maxAnisotrophy,
+          (g_enableVerticalSync ? "enabled" : "disabled"),
+          g_camera.getPosition().x,
+          g_camera.getPosition().y,
+          g_camera.getPosition().z,
+          g_camera.getCurrentVelocity().x,
+          g_camera.getCurrentVelocity().y,
+          g_camera.getCurrentVelocity().z,
+          g_cameraRotationSpeed,
+          (g_flightModeEnabled ? "Flight" : "First person"),
+          (mouse.isMouseSmoothing() ? "enabled" : "disabled"),
+          mouse.weightModifier()
+);
+        ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", output.c_str());
     }
-
+    ImGui::End();
     //g_font.begin();
     //g_font.setColor(1.0f, 1.0f, 0.0f);
     //g_font.drawText(1, 1, output.str().c_str());
