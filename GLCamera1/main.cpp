@@ -34,6 +34,7 @@
 #include "camera.h"
 #include "shaders.hpp"
 
+
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
@@ -69,7 +70,7 @@ constexpr float FLOOR_TILE_T = 8.0F;
 
 static HWND      g_hWnd;
 static HDC       g_hDC;
-static HGLRC     g_hRC;
+static HGLRC     g_hContext;
 static HINSTANCE g_hInstance;
 static int       g_framesPerSecond;
 static int       g_windowWidth;
@@ -83,7 +84,6 @@ static bool      g_displayHelp;
 static bool      g_flightModeEnabled;
 static GLuint    g_floorColorMapTexture;
 static GLuint    g_floorLightMapTexture;
-//static GLFont    g_font;
 static Camera    g_camera;
 static glm::vec3 g_cameraBoundsMax;
 static glm::vec3 g_cameraBoundsMin;
@@ -92,7 +92,11 @@ static float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 static GLuint g_VAO = 0;
 static GLuint g_VBO = 0;
 static GLuint g_EBO = 0;
+static GLuint g_UBO = 0;
 static GLuint g_Program = 0;
+
+static GLint g_uTexture0Locaion;
+static GLint g_uTexture1Locaion;
 
 wglCreateContextAttribsARBFunc wglCreateContextAttribsARB;
 wglChoosePixelFormatARBFunc    wglChoosePixelFormatARB;
@@ -112,7 +116,6 @@ bool    Init();
 void    InitApp();
 void    InitOpenglExtensions();
 void    InitGL();
-void    LimitFrameRate(float frameRateLimit, float frameTimeSeconds);
 GLuint  LoadTexture(const char *pszFilename);
 GLuint  LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
                     GLint wrapS, GLint wrapT);
@@ -199,7 +202,7 @@ int WINAPI WinMain(HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstance
                 } else {
                     WaitMessage();
                 }
-                FrameMark;
+                FrameMark; // NOLINT
             }
         }
 
@@ -225,8 +228,9 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
 
         case WA_INACTIVE:
-            if (g_isFullScreen)
+            if (g_isFullScreen) {
                 ShowWindow(hWnd, SW_MINIMIZE);
+            }
             Mouse::instance().detach();
             g_hasFocus = false;
             break;
@@ -256,14 +260,12 @@ void Cleanup() {
     CleanupApp();
 
     if (g_hDC) {
-        if (g_hRC) {
+        if(g_hContext) {
             wglMakeCurrent(g_hDC, 0);
-            wglDeleteContext(g_hRC);
-            g_hRC = 0;
+            wglDeleteContext(g_hContext);
         }
 
         ReleaseDC(g_hWnd, g_hDC);
-        g_hDC = 0;
     }
 }
 
@@ -271,25 +273,14 @@ void CleanupApp() {
     ZoneScoped; // NOLINT
     //g_font.destroy();
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    if (g_floorColorMapTexture) {
-        glDeleteTextures(1, &g_floorColorMapTexture);
-        g_floorColorMapTexture = 0;
-    }
-
-    if (g_floorLightMapTexture) {
-        glDeleteTextures(1, &g_floorLightMapTexture);
-        g_floorLightMapTexture = 0;
-    }
-
     glBindVertexArray(0);
     if(g_VAO != 0) {
-        glDeleteVertexArrays(1, &g_VAO);
+      glDeleteVertexArrays(1, &g_VAO);
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     if(g_VBO != 0) {
-        glDeleteBuffers(1, &g_VBO);
+      glDeleteBuffers(1, &g_VBO);
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -299,7 +290,21 @@ void CleanupApp() {
 
     glUseProgram(0);
     if(g_Program) {
-        glDeleteProgram(g_Program);
+      glDeleteProgram(g_Program);
+    }
+
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    if(g_UBO != 0) {
+        glDeleteBuffers(1, &g_UBO);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (g_floorColorMapTexture) {
+        glDeleteTextures(1, &g_floorColorMapTexture);
+    }
+
+    if (g_floorLightMapTexture) {
+        glDeleteTextures(1, &g_floorLightMapTexture);
     }
 }
 
@@ -535,32 +540,128 @@ void GetMovementDirection(glm::vec3 &direction) {
 
 bool Init() {
     ZoneScoped; // NOLINT
+
     try {
         InitGL();
-
-        //if (!ExtensionSupported("GL_ARB_multitexture"))
-        //    throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
-
         InitApp();
-        return true;
     } catch (const std::exception &e) {
-        std::ostringstream msg;
-
-        msg << "Application initialization failed!" << std::endl << std::endl;
-        msg << e.what();
-
-        Log(msg.str().c_str());
+        const auto errorMessage = fmt::format("Application initialization failed!\n\n{}", e.what());
+        Log(errorMessage.c_str());
         return false;
     }
+
+    return true;
+}
+
+void InitGL() {
+  ZoneScoped;  // NOLINT
+
+  g_hDC = GetDC(g_hWnd);
+  if(!g_hDC) {
+    throw std::runtime_error("GetDC() failed.");
+  }
+
+  InitOpenglExtensions();
+
+  // clang-format off
+  constexpr auto WGL_DRAW_TO_WINDOW_ARB = 0x2001;
+  constexpr auto WGL_ACCELERATION_ARB   = 0x2003;
+  constexpr auto WGL_SUPPORT_OPENGL_ARB = 0x2010;
+  constexpr auto WGL_DOUBLE_BUFFER_ARB  = 0x2011;
+  constexpr auto WGL_PIXEL_TYPE_ARB     = 0x2013;
+  constexpr auto WGL_COLOR_BITS_ARB     = 0x2014;
+  constexpr auto WGL_DEPTH_BITS_ARB     = 0x2022;
+  constexpr auto WGL_STENCIL_BITS_ARB   = 0x2023;
+
+  constexpr auto WGL_FULL_ACCELERATION_ARB = 0x2027;
+  constexpr auto WGL_TYPE_RGBA_ARB         = 0x202B;
+  // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
+  constexpr int pixel_format_attribs[] = {
+      WGL_DRAW_TO_WINDOW_ARB,     GL_TRUE,
+      WGL_SUPPORT_OPENGL_ARB,     GL_TRUE,
+      WGL_DOUBLE_BUFFER_ARB,      GL_TRUE,
+      WGL_ACCELERATION_ARB,       WGL_FULL_ACCELERATION_ARB,
+      WGL_PIXEL_TYPE_ARB,         WGL_TYPE_RGBA_ARB,
+      WGL_COLOR_BITS_ARB,         32,
+      WGL_DEPTH_BITS_ARB,         24,
+      WGL_STENCIL_BITS_ARB,       8,
+      0
+  };
+  // clang-format on
+
+  int pixel_format;
+  UINT num_formats;
+  wglChoosePixelFormatARB(g_hDC, pixel_format_attribs, 0, 1, &pixel_format, &num_formats);
+  if(num_formats == 0) {
+    throw std::runtime_error("wglChoosePixelFormatARB() failed.");
+  }
+
+  PIXELFORMATDESCRIPTOR pfd;
+  DescribePixelFormat(g_hDC, pixel_format, sizeof(pfd), &pfd);
+  if(!SetPixelFormat(g_hDC, pixel_format, &pfd)) {
+    throw std::runtime_error("SetPixelFormat() failed.");
+  }
+
+  constexpr auto WGL_CONTEXT_MAJOR_VERSION_ARB = 0x2091;
+  constexpr auto WGL_CONTEXT_MINOR_VERSION_ARB = 0x2092;
+  constexpr auto WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
+  constexpr auto WGL_CONTEXT_FLAGS_ARB = 0x2094;
+  constexpr auto WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
+
+  constexpr auto WGL_CONTEXT_DEBUG_BIT_ARB = 0x0001;
+  constexpr auto WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
+
+  // clang-format off
+  // Specify that we want to create an OpenGL 3.3 core profile context
+  constexpr int attribs[] = {
+      WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+      WGL_CONTEXT_MINOR_VERSION_ARB, 6,
+      WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+#ifdef OPENG_DEBUG
+      WGL_CONTEXT_FLAGS_ARB       ,  WGL_CONTEXT_DEBUG_BIT_ARB,
+#endif
+      0,
+  };
+  // clang-format on
+
+  g_hContext = wglCreateContextAttribsARB(g_hDC, 0, attribs);
+  if(!g_hContext) {
+    throw std::runtime_error("wglCreateContextAttribsARB() failed.");
+  }
+
+  if(!wglMakeCurrent(g_hDC, g_hContext)) {
+    throw std::runtime_error("wglMakeCurrent() failed.");
+  }
+
+  if(gl3wInit() != GL3W_OK) {
+    throw std::runtime_error("gl3wInit() failed.");
+  }
+
+#ifdef OPENG_DEBUG
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback(
+    [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {
+      /*
+      static FILE* pLogging = fopen("Logging.txt", "w");
+      fprintf(pLogging,
+              "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+              (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+              type,
+              severity,
+              message);
+    */
+    },
+    0);
+#endif
+
+  EnableVerticalSync(false);
+
+  glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
 }
 
 void InitApp() {
   ZoneScoped; // NOLINT
-
-  // Setup fonts.
-  //if (!g_font.create("Arial", 10, GLFont::BOLD)) {
-  //    throw std::runtime_error("Failed to create font.");
-  //}
 
   // Load textures.
   g_floorColorMapTexture = LoadTexture("floor_color_map.jpg");
@@ -671,113 +772,6 @@ void InitOpenglExtensions() {
   DestroyWindow(dummyWindow);
 }
 
-void InitGL() {
-  ZoneScoped; // NOLINT
-
-  g_hDC = GetDC(g_hWnd);
-  if(!g_hDC) {
-    throw std::runtime_error("GetDC() failed.");
-  }
-
-  InitOpenglExtensions();
-
-  // clang-format off
-  constexpr auto WGL_DRAW_TO_WINDOW_ARB = 0x2001;
-  constexpr auto WGL_ACCELERATION_ARB   = 0x2003;
-  constexpr auto WGL_SUPPORT_OPENGL_ARB = 0x2010;
-  constexpr auto WGL_DOUBLE_BUFFER_ARB  = 0x2011;
-  constexpr auto WGL_PIXEL_TYPE_ARB     = 0x2013;
-  constexpr auto WGL_COLOR_BITS_ARB     = 0x2014;
-  constexpr auto WGL_DEPTH_BITS_ARB     = 0x2022;
-  constexpr auto WGL_STENCIL_BITS_ARB   = 0x2023;
-
-  constexpr auto WGL_FULL_ACCELERATION_ARB = 0x2027;
-  constexpr auto WGL_TYPE_RGBA_ARB         = 0x202B;
-  // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
-  constexpr int pixel_format_attribs[] = {
-      WGL_DRAW_TO_WINDOW_ARB,     GL_TRUE,
-      WGL_SUPPORT_OPENGL_ARB,     GL_TRUE,
-      WGL_DOUBLE_BUFFER_ARB,      GL_TRUE,
-      WGL_ACCELERATION_ARB,       WGL_FULL_ACCELERATION_ARB,
-      WGL_PIXEL_TYPE_ARB,         WGL_TYPE_RGBA_ARB,
-      WGL_COLOR_BITS_ARB,         32,
-      WGL_DEPTH_BITS_ARB,         24,
-      WGL_STENCIL_BITS_ARB,       8,
-      0
-  };
-  // clang-format on
-
-  int pixel_format;
-  UINT num_formats;
-  wglChoosePixelFormatARB(g_hDC, pixel_format_attribs, 0, 1, &pixel_format, &num_formats);
-  if (!num_formats) {
-      throw std::runtime_error("wglChoosePixelFormatARB() failed.");
-  }
-
-  PIXELFORMATDESCRIPTOR pfd;
-  DescribePixelFormat(g_hDC, pixel_format, sizeof(pfd), &pfd);
-  if(!SetPixelFormat(g_hDC, pixel_format, &pfd)) {
-      throw std::runtime_error("SetPixelFormat() failed.");
-  }
-
-  constexpr auto WGL_CONTEXT_MAJOR_VERSION_ARB    = 0x2091;
-  constexpr auto WGL_CONTEXT_MINOR_VERSION_ARB    = 0x2092;
-  constexpr auto WGL_CONTEXT_PROFILE_MASK_ARB     = 0x9126;
-  constexpr auto WGL_CONTEXT_FLAGS_ARB            = 0x2094;
-  constexpr auto WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
-
-  constexpr auto WGL_CONTEXT_DEBUG_BIT_ARB              = 0x0001;
-  constexpr auto WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
-
-  // clang-format off
-  // Specify that we want to create an OpenGL 3.3 core profile context
-  constexpr int attribs[] = {
-      WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
-      WGL_CONTEXT_MINOR_VERSION_ARB, 6,
-      WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-#ifdef OPENG_DEBUG
-      WGL_CONTEXT_FLAGS_ARB       ,  WGL_CONTEXT_DEBUG_BIT_ARB,
-#endif
-      0,
-  };
-  // clang-format on
-
-  HGLRC context = wglCreateContextAttribsARB(g_hDC, 0, attribs);
-  if(!context) {
-    throw std::runtime_error("wglCreateContextAttribsARB() failed.");
-  }
-
-  if(!wglMakeCurrent(g_hDC, context)) {
-    throw std::runtime_error("wglMakeCurrent() failed.");
-  }
-
-  if(gl3wInit() != GL3W_OK) {
-    throw std::runtime_error("gl3wInit() failed.");
-  }
-
-#ifdef OPENG_DEBUG
-  glEnable(GL_DEBUG_OUTPUT);
-  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-  glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
-                            GLenum severity, GLsizei length, const GLchar *message,
-                            const void *userParam) {
-    /*
-      static FILE* pLogging = fopen("Logging.txt", "w");
-      fprintf(pLogging,
-              "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-              (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-              type,
-              severity,
-              message);
-    */
-    }, 0);
-#endif
-
-  EnableVerticalSync(false);
-
-  glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
-}
-
 GLuint LoadTexture(const char *pszFilename) {
     ZoneScoped; // NOLINT
 
@@ -795,20 +789,19 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
     void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
     if(pImage != nullptr) {
-        glGenTextures(1, &id);
-        glBindTexture(GL_TEXTURE_2D, id);
+        glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, magFilter);
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, minFilter);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S,     wrapS);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T,     wrapT);
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,     wrapS);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,     wrapT);
+        glTextureStorage2D(id,  1, GL_RGBA8, width, height);
+        glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
         if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
-          glGenerateMipmap(GL_TEXTURE_2D);
+          glGenerateTextureMipmap(id);
         }
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glTextureParameteri(id, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
 
         stbi_image_free(pImage);
     }
@@ -818,6 +811,7 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
 
 void Log(const char *pszMessage) {
     ZoneScoped; // NOLINT
+
     MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
 }
 
@@ -849,6 +843,7 @@ void PerformCameraCollisionDetection() {
 
 void ProcessUserInput() {
     ZoneScoped; // NOLINT
+
     Keyboard &keyboard = Keyboard::instance();
     Mouse &mouse = Mouse::instance();
 
@@ -919,21 +914,19 @@ void RenderFloor() {
 
   glUseProgram(g_Program);
 
+  constexpr auto FloorTextureId = 0;
+  glBindTextureUnit(FloorTextureId, g_floorColorMapTexture);
+  glUniform1i(g_uTexture0Locaion, FloorTextureId);
+
+  constexpr auto FloorLightTextureId = 1;
+  glBindTextureUnit(FloorLightTextureId, g_floorLightMapTexture);
+  glUniform1i(g_uTexture1Locaion, FloorLightTextureId);
+
+  glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
+
   constexpr auto PositionID = 0;
   constexpr auto UV1ID      = 1;
   constexpr auto UV2ID      = 2;
-
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
-  static auto uTexture0Locaion = glGetUniformLocation(g_Program, "uTexture0");
-  glUniform1i(uTexture0Locaion, 0);
-
-  glActiveTexture(GL_TEXTURE1);
-  glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
-  static auto uTexture1Locaion = glGetUniformLocation(g_Program, "uTexture1");
-  glUniform1i(uTexture1Locaion, 1);
-
-  glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
 
   glEnableVertexAttribArray(PositionID);
   glEnableVertexAttribArray(UV1ID);
@@ -975,8 +968,7 @@ void RenderText() {
     ZoneScoped; // NOLINT
     std::ostringstream output;
 
-    if (g_displayHelp)
-    {
+    if (g_displayHelp) {
         output
             << "First person camera behavior" << std::endl
             << "  Press W and S to move forwards and backwards" << std::endl
@@ -999,9 +991,7 @@ void RenderText() {
             << "Press ESC to exit" << std::endl
             << std::endl
             << "Press H to hide help";
-    }
-    else
-    {
+    } else {
         Mouse &mouse = Mouse::instance();
 
         output.setf(std::ios::fixed, std::ios::floatfield);
@@ -1040,6 +1030,7 @@ void RenderText() {
 
 void SetProcessorAffinity() {
     ZoneScoped; // NOLINT
+
     // Assign the current thread to one processor. This ensures that timing
     // code runs on only one processor, and will not suffer any ill effects
     // from power management.
@@ -1076,6 +1067,7 @@ void SetProcessorAffinity() {
 
 void ToggleFullScreen() {
     ZoneScoped; // NOLINT
+
     static DWORD savedExStyle;
     static DWORD savedStyle;
     static RECT rcSaved;
@@ -1121,6 +1113,7 @@ void ToggleFullScreen() {
 
 void UpdateCamera(float elapsedTimeSec) {
     ZoneScoped; // NOLINT
+
     float heading = 0.0f;
     float pitch   = 0.0f;
     float roll    = 0.0f;
@@ -1155,6 +1148,7 @@ void UpdateCamera(float elapsedTimeSec) {
 
 void UpdateFrame(float elapsedTimeSec) {
     ZoneScoped; // NOLINT
+
     UpdateFrameRate(elapsedTimeSec);
 
     Mouse::instance().update();
@@ -1217,21 +1211,22 @@ void createBuffers() {
   constexpr auto uvs1Size      = uvs1.size()     * sizeof(glm::vec2);
   constexpr auto totalSize     = verteicesSize + uvs0Size + uvs1Size;
 
-  glGenBuffers(1, &g_VBO);
-  glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
-  glBufferData(GL_ARRAY_BUFFER, totalSize, nullptr, GL_STATIC_DRAW);
-  glBufferSubData(GL_ARRAY_BUFFER, 0,                        verteicesSize, vertices.data());
-  glBufferSubData(GL_ARRAY_BUFFER, verteicesSize,            uvs0Size,      uvs0.data());
-  glBufferSubData(GL_ARRAY_BUFFER, verteicesSize + uvs0Size, uvs1Size,      uvs1.data());
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glCreateBuffers(1, &g_VBO);
+  glNamedBufferStorage(g_VBO, totalSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+  glNamedBufferSubData(g_VBO, 0,                        verteicesSize, vertices.data());
+  glNamedBufferSubData(g_VBO, verteicesSize,            uvs0Size, uvs0.data());
+  glNamedBufferSubData(g_VBO, verteicesSize + uvs0Size, uvs1Size, uvs1.data());
   // clang-format on
 
   constexpr auto ElementsSize = static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t));
   glCreateBuffers(1, &g_EBO);
-  glNamedBufferData(g_EBO, ElementsSize, elements.data(), GL_STATIC_DRAW);
+  glNamedBufferStorage(g_EBO, ElementsSize, elements.data(), GL_DYNAMIC_STORAGE_BIT);
 }
 
-void createUniformBuffers() {}
+void createUniformBuffers() {
+    glCreateBuffers(1, &g_UBO);
+    glNamedBufferStorage(g_UBO, sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+}
 
 void createProgram() {
   ZoneScoped;  // NOLINT
@@ -1292,5 +1287,14 @@ void createProgram() {
   glDeleteShader(static_cast<GLuint>(fragmentShader));
 
   g_Program = static_cast<GLuint>(program);
-  glUseProgram(g_Program);
+
+  g_uTexture0Locaion = glGetUniformLocation(g_Program, "uTexture0");
+  if(g_uTexture0Locaion == -1) {
+    throw std::runtime_error("\"uTexture0\" uniform doesn't exists.");
+  }
+
+  g_uTexture1Locaion = glGetUniformLocation(g_Program, "uTexture1");
+  if(g_uTexture1Locaion == -1) {
+    throw std::runtime_error("\"uTexture0\" uniform doesn't exists.");
+  }
 }

@@ -13,6 +13,7 @@
 #include <string_view>
 // fmt
 #include <fmt/color.h>
+#include <fmt/format.h>
 #include <fmt/printf.h>
 // gl3w
 #include <GL/gl3w.h>
@@ -43,7 +44,12 @@ inline double get_time() {
 }
 #endif
 // Tracy
+#ifdef TRACY_ENABLE
 #include <Tracy.hpp>
+#else
+#  define ZoneScoped
+#  define FrameMark
+#endif
 // glm
 #include <glm/glm.hpp>
 #include <glm/gtx/type_trait.hpp>
