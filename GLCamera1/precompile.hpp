@@ -15,8 +15,10 @@
 #include <fmt/color.h>
 #include <fmt/format.h>
 #include <fmt/printf.h>
-// gl3w
-#include <GL/gl3w.h>
+// glbinding
+#include <glbinding/gl/gl.h>
+#include <glbinding/glbinding.h>
+using namespace gl;
 // OS
 #ifdef _WIN32
 #include <windows.h>

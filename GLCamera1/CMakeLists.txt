@@ -20,7 +20,7 @@ target_link_libraries(
     PRIVATE
     glm
     fmt::fmt
-    gl3w::gl3w
+    glbinding::glbinding
     stb::image
     OpenGL::GL
     OpenGL::GLU

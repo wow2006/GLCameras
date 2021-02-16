@@ -16,9 +16,9 @@ list(
 include(options)
 include(download_file)
 
-find_package(fmt    REQUIRED)
-find_package(glm    REQUIRED)
-find_package(gl3w   REQUIRED)
+find_package(fmt       CONFIG REQUIRED)
+find_package(glm       CONFIG REQUIRED)
+find_package(glbinding CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(tracy  REQUIRED)
 find_package(stb    REQUIRED COMPONENTS image truetype)

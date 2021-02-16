@@ -13,9 +13,9 @@ GLint createShader(GLenum type, const char *shaderSource) {
   glShaderSource(shaderID, 1, &shaderSource, nullptr);
   glCompileShader(shaderID);
 
-  GLint result = GL_FALSE;
+  GLint result = 0;
   glGetShaderiv(shaderID, GL_COMPILE_STATUS, &result);
-  if(result != GL_TRUE) {
+  if(result != 1) {
     std::array<GLchar, MessageLength> message = {};
     glGetShaderInfoLog(shaderID, MessageLength, nullptr, message.data());
 #ifdef _CONSOLE
@@ -40,9 +40,9 @@ GLint createProgram(GLint vertexShaderID, GLint fragmentShaderID) {
   glLinkProgram(programID);
 
   // Check the program
-  GLint result = GL_FALSE;
+  GLint result = 0;
   glGetProgramiv(programID, GL_LINK_STATUS, &result);
-  if(result != GL_TRUE) {
+  if(result != 1) {
     std::array<GLchar, MessageLength> message = {};
     glGetProgramInfoLog(programID, MessageLength, nullptr, message.data());
 #ifdef _CONSOLE

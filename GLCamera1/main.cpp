@@ -117,8 +117,8 @@ void    InitApp();
 void    InitOpenglExtensions();
 void    InitGL();
 GLuint  LoadTexture(const char *pszFilename);
-GLuint  LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
-                    GLint wrapS, GLint wrapT);
+GLuint  LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter,
+                    GLenum wrapS, GLenum wrapT);
 void    Log(const char *pszMessage);
 void    PerformCameraCollisionDetection();
 void    ProcessUserInput();
@@ -577,9 +577,9 @@ void InitGL() {
   constexpr auto WGL_TYPE_RGBA_ARB         = 0x202B;
   // Now we can choose a pixel format the modern way, using wglChoosePixelFormatARB.
   constexpr int pixel_format_attribs[] = {
-      WGL_DRAW_TO_WINDOW_ARB,     GL_TRUE,
-      WGL_SUPPORT_OPENGL_ARB,     GL_TRUE,
-      WGL_DOUBLE_BUFFER_ARB,      GL_TRUE,
+      WGL_DRAW_TO_WINDOW_ARB,     1,
+      WGL_SUPPORT_OPENGL_ARB,     1,
+      WGL_DOUBLE_BUFFER_ARB,      1,
       WGL_ACCELERATION_ARB,       WGL_FULL_ACCELERATION_ARB,
       WGL_PIXEL_TYPE_ARB,         WGL_TYPE_RGBA_ARB,
       WGL_COLOR_BITS_ARB,         32,
@@ -633,9 +633,11 @@ void InitGL() {
     throw std::runtime_error("wglMakeCurrent() failed.");
   }
 
-  if(gl3wInit() != GL3W_OK) {
-    throw std::runtime_error("gl3wInit() failed.");
-  }
+  // glbinding::GetProcAddress
+  glbinding::initialize(glbinding::GetProcAddress());
+  //f(gl3wInit() != GL3W_OK) {
+  // throw std::runtime_error("gl3wInit() failed.");
+  //
 
 #ifdef OPENG_DEBUG
   glEnable(GL_DEBUG_OUTPUT);
@@ -779,8 +781,8 @@ GLuint LoadTexture(const char *pszFilename) {
         GL_REPEAT, GL_REPEAT);
 }
 
-GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
-                   GLint wrapS, GLint wrapT) {
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter,
+                   GLenum wrapS, GLenum wrapT) {
     ZoneScoped; // NOLINT
 
     GLuint id = 0;
