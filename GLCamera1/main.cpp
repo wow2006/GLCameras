@@ -1002,7 +1002,8 @@ void RenderText() {
     ZoneScoped; // NOLINT
 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(g_windowWidth/2, g_windowHeight));
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowWidth/2),
+                                    static_cast<float>(g_windowHeight)));
     ImGui::Begin("Text", nullptr, ImGuiWindowFlags_NoBackground |
                                   ImGuiWindowFlags_NoTitleBar   |
                                   ImGuiWindowFlags_NoResize     |
