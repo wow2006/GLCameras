@@ -16,6 +16,7 @@ list(
 include(options)
 include(download_file)
 
+find_package(SDL2   REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(fmt       CONFIG REQUIRED)
 find_package(glm       CONFIG REQUIRED)

@@ -24,8 +24,20 @@ if(WIN32)
     )
 
     find_library(
-        SDL2_LIBRARY_DEBUG
+        SDL2_MAIN_LIBRARY
+        SDL2main
+        ${CMAKE_TOOLCHAIN_DIR}/installed/x64-windows/lib
+    )
+
+    find_library(
+        SDL2_MAIN_LIBRARY_DEBUG
         SDL2d
+        ${CMAKE_TOOLCHAIN_DIR}/installed/x64-windows/debug/lib
+    )
+
+    find_library(
+        SDL2_LIBRARY_DEBUG
+        SDL2maind
         ${CMAKE_TOOLCHAIN_DIR}/installed/x64-windows/debug/lib
     )
 
@@ -33,7 +45,9 @@ if(WIN32)
         SDL2
         REQUIRED_VARS
         SDL2_LIBRARY_DEBUG
+        SDL2_MAIN_LIBRARY_DEBUG
         SDL2_LIBRARY
+        SDL2_MAIN_LIBRARY
         SDL2_INCLUDE_DIR
     )
 else()
@@ -83,6 +97,29 @@ if(SDL2_FOUND)
             IMPORTED_LOCATION_DEBUG "${SDL2_LIBRARY_DEBUG}"
         )
     endif()
+  endif()
+
+  if(WIN32)
+      if(NOT TARGET SDL2::SDL2main)
+        add_library(
+            SDL2::SDL2main
+            UNKNOWN
+            IMPORTED
+        )
+
+        set_target_properties(
+            SDL2::SDL2main
+            PROPERTIES
+            IMPORTED_LOCATION "${SDL2_MAIN_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${SDL2_INCLUDE_DIR}"
+        )
+
+        set_target_properties(
+            SDL2::SDL2main
+            PROPERTIES
+            IMPORTED_LOCATION_DEBUG "${SDL2_MAIN_LIBRARY_DEBUG}"
+        )
+      endif()
   endif()
 endif()
 

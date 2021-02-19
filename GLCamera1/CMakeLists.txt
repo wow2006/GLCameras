@@ -20,6 +20,8 @@ target_link_libraries(
     PRIVATE
     glm
     fmt::fmt
+    SDL2::SDL2
+    SDL2::SDL2main
     glbinding::glbinding
     Imgui::OpenGL
     Imgui::Win32
@@ -33,7 +35,7 @@ target_link_libraries(
 target_compile_definitions(
     GLCamera1
     PRIVATE
-    #OPENG_DEBUG
+    #OPENGL_DEBUG
 )
 
 set_target_properties(

@@ -23,6 +23,8 @@ using namespace gl;
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_opengl3.h>
+// SDL2
+#include <SDL2/SDl.h>
 // OS
 #ifdef _WIN32
 #include <windows.h>
