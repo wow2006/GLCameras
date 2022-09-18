@@ -18,7 +18,7 @@ target_sources(
 target_link_libraries(
     GLCamera1
     PRIVATE
-    glm
+    glm::glm
     fmt::fmt
     glbinding::glbinding
     Imgui::OpenGL
@@ -26,7 +26,7 @@ target_link_libraries(
     stb::image
     OpenGL::GL
     OpenGL::GLU
-    tracy::tracy
+    #tracy::tracy
     options::options
 )
 
