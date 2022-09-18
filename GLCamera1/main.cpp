@@ -611,11 +611,11 @@ void InitGL() {
   constexpr auto WGL_CONTEXT_MAJOR_VERSION_ARB = 0x2091;
   constexpr auto WGL_CONTEXT_MINOR_VERSION_ARB = 0x2092;
   constexpr auto WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
-  constexpr auto WGL_CONTEXT_FLAGS_ARB = 0x2094;
+  [[maybe_unused]] constexpr auto WGL_CONTEXT_FLAGS_ARB = 0x2094;
   constexpr auto WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
 
-  constexpr auto WGL_CONTEXT_DEBUG_BIT_ARB = 0x0001;
-  constexpr auto WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
+  [[maybe_unused]] constexpr auto WGL_CONTEXT_DEBUG_BIT_ARB = 0x0001;
+ 
 
   // clang-format off
   // Specify that we want to create an OpenGL 3.3 core profile context

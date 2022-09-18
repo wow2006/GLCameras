@@ -21,8 +21,8 @@ GLCamera1
 - [x] Adding Support for GL3W.
 - [x] Port OpenGL 1.0 to OpenGL 4.6
 - [x] Remove gl_font.
-- [ ] Adding Imgui support.
-- [ ] Replace old font with Imgui background drawing.
+- [x] Adding Imgui support.
+- [x] Replace old font with Imgui background drawing.
 - [ ] Use DSA for OpenGL Functions.
 - [ ] Replace Default Uniform buffer with UBO.
 - [ ] Adding support for SDL2.
