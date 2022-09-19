@@ -944,22 +944,26 @@ void RenderFloor() {
   glBindTextureUnit(FloorLightTextureId, g_floorLightMapTexture);
   glUniform1i(g_uTexture1Locaion, FloorLightTextureId);
 
-  glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
-
   constexpr auto PositionID = 0;
   constexpr auto UV1ID      = 1;
   constexpr auto UV2ID      = 2;
+
+  glBindVertexBuffer(0, g_VBO, 0, sizeof(float) * 7);
 
   glEnableVertexAttribArray(PositionID);
   glEnableVertexAttribArray(UV1ID);
   glEnableVertexAttribArray(UV2ID);
 
-  const auto offset1 = (GLvoid *)(4 * sizeof(glm::vec3));
-  const auto offset2 = (GLvoid *)(4 * sizeof(glm::vec3) + 4 * sizeof(glm::vec2));
+  const auto offset1 = sizeof(glm::vec3);
+  const auto offset2 = (sizeof(glm::vec3) + sizeof(glm::vec2));
 
-  glVertexAttribPointer(PositionID, 3, GL_FLOAT, GL_FALSE, 0, 0);
-  glVertexAttribPointer(UV1ID,      2, GL_FLOAT, GL_FALSE, 0, offset1);
-  glVertexAttribPointer(UV2ID,      2, GL_FLOAT, GL_FALSE, 0, offset2 );
+  glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, 0);
+  glVertexAttribFormat(UV1ID,      2, GL_FLOAT, GL_FALSE, offset1);
+  glVertexAttribFormat(UV2ID,      2, GL_FLOAT, GL_FALSE, offset2);
+
+  glVertexAttribBinding(PositionID, 0);
+  glVertexAttribBinding(UV1ID,      0);
+  glVertexAttribBinding(UV2ID,      0);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_EBO);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
@@ -1237,35 +1241,17 @@ void createBuffers() {
       3, 1, 0,
       3, 2, 1
   };
-  constexpr std::array<glm::vec3, 4> vertices = {
-    glm::vec3(-FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F),
-    glm::vec3( FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F),
-    glm::vec3( FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F),
-    glm::vec3(-FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F),
-  };
-  constexpr std::array<glm::vec2, 4> uvs0     = {
-    glm::vec2(0.0F,         0.0F),
-    glm::vec2(FLOOR_TILE_S, 0.0F),
-    glm::vec2(FLOOR_TILE_S, FLOOR_TILE_T),
-    glm::vec2(0.00F,        FLOOR_TILE_T),
-  };
-  constexpr std::array<glm::vec2, 4> uvs1     = {
-    glm::vec2(0.0F, 0.0F),
-    glm::vec2(1.0F, 0.0F),
-    glm::vec2(1.0F, 1.0F),
-    glm::vec2(0.0F, 1.0F),
+  constexpr std::array<float, 4 * 7> vertices = {
+    -FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, 0.0F,         0.0F,         0.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, 0.0F,         1.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, FLOOR_TILE_T, 1.0F, 1.0F,
+    -FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, 0.00F,        FLOOR_TILE_T, 0.0F, 1.0F,
   };
 
-  constexpr auto verteicesSize = vertices.size() * sizeof(glm::vec3);
-  constexpr auto uvs0Size      = uvs0.size()     * sizeof(glm::vec2);
-  constexpr auto uvs1Size      = uvs1.size()     * sizeof(glm::vec2);
-  constexpr auto totalSize     = verteicesSize + uvs0Size + uvs1Size;
+  constexpr auto verteicesSize = vertices.size() * sizeof(float);
 
   glCreateBuffers(1, &g_VBO);
-  glNamedBufferStorage(g_VBO, totalSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
-  glNamedBufferSubData(g_VBO, 0,                        verteicesSize, vertices.data());
-  glNamedBufferSubData(g_VBO, verteicesSize,            uvs0Size, uvs0.data());
-  glNamedBufferSubData(g_VBO, verteicesSize + uvs0Size, uvs1Size, uvs1.data());
+  glNamedBufferStorage(g_VBO, verteicesSize, vertices.data(), GL_DYNAMIC_STORAGE_BIT);
   // clang-format on
 
   constexpr auto ElementsSize = static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t));
