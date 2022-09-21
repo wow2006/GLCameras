@@ -25,7 +25,7 @@ find_package(tracy  REQUIRED)
 find_package(stb    REQUIRED COMPONENTS image truetype)
 
 add_subdirectory(GLCamera1)
-#add_subdirectory(GLCamera2)
+add_subdirectory(GLCamera2)
 #add_subdirectory(GLCamera3)
 #add_subdirectory(GLThirdPersonCamera1)
 #add_subdirectory(GLThirdPersonCamera2)

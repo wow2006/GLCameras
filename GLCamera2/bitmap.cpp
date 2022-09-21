@@ -20,7 +20,7 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-#pragma comment (lib, "olepro32.lib")   // for IPicture COM interface support
+//#pragma comment (lib, "olepro32.lib")   // for IPicture COM interface support
 
 #include <windows.h>
 #include <olectl.h.>    // for OleLoadPicture() and IPicture COM interface
