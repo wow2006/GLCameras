@@ -48,9 +48,9 @@ set_target_properties(
 )
 
 target_precompile_headers(
-    GLCamera1
-    PRIVATE
-    precompile.hpp
+  GLCamera1
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/utilities/precompile.hpp
 )
 
 download_file(
