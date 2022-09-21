@@ -64,6 +64,7 @@ constexpr float FLOOR_HEIGHT = 16.0F;
 constexpr float FLOOR_TILE_S = 8.0F;
 constexpr float FLOOR_TILE_T = 8.0F;
 
+constexpr uint32_t MATRICES_BINDING_POINT = 0;
 //-----------------------------------------------------------------------------
 // Globals.
 //-----------------------------------------------------------------------------
@@ -133,6 +134,7 @@ void    UpdateFrame(float elapsedTimeSec);
 void    UpdateFrameRate(float elapsedTimeSec);
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void    createBuffers();
+void    createUniformBuffers();
 void    createProgram();
 
 //-----------------------------------------------------------------------------
@@ -615,7 +617,6 @@ void InitGL() {
   constexpr auto WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
 
   [[maybe_unused]] constexpr auto WGL_CONTEXT_DEBUG_BIT_ARB = 0x0001;
- 
 
   // clang-format off
   // Specify that we want to create an OpenGL 3.3 core profile context
@@ -716,6 +717,7 @@ void InitApp() {
   Mouse::instance().moveToWindowCenter();
 
   createBuffers();
+  createUniformBuffers();
   createProgram();
 }
 
@@ -992,12 +994,14 @@ void RenderFrame() {
   const auto projection = g_camera.getProjectionMatrix();
   const auto view       = g_camera.getViewMatrix();
   const auto MVP = projection * view;
+  const auto MVP        = projection * view;
 
-  static GLint location = glGetUniformLocation(g_Program, "uMVP");
-  glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(MVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
+  glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(MVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
   RenderFloor();
-  //RenderText();
 
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -1259,9 +1263,11 @@ void createBuffers() {
   glNamedBufferStorage(g_EBO, ElementsSize, elements.data(), GL_DYNAMIC_STORAGE_BIT);
 }
 
+inline size_t uboAligned(size_t size) { return ((size + 255) / 256) * 256; }
+
 void createUniformBuffers() {
-    glCreateBuffers(1, &g_UBO);
-    glNamedBufferStorage(g_UBO, sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+  glCreateBuffers(1, &g_UBO);
+  glNamedBufferStorage(g_UBO, uboAligned(sizeof(glm::mat4)), nullptr, GL_DYNAMIC_STORAGE_BIT);
 }
 
 void createProgram() {
@@ -1274,7 +1280,10 @@ void createProgram() {
   layout(location=1) in vec2 aUV0;
   layout(location=2) in vec2 aUV1;
 
-  layout(location=0) uniform mat4 uMVP;
+  layout(std140, binding=0) uniform Matrices
+  {
+      mat4 uMVP;
+  };
 
   out Interpolants {
     vec2 wUV0;

@@ -24,7 +24,7 @@ GLCamera1
 - [x] Adding Imgui support.
 - [x] Replace old font with Imgui background drawing.
 - [x] Use DSA for OpenGL Functions.
-- [ ] Replace Default Uniform buffer with UBO.
+- [x] Replace Default Uniform buffer with UBO.
 - [ ] Adding support for SDL2.
 
 GLCamera2
