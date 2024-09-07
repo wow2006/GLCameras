@@ -30,65 +30,67 @@
 // stb
 #include <stb_image.h>
 // Internal
-#include "input.h"
-#include "camera.h"
+#include "input.hpp"
+#include "camera.hpp"
 #include "shaders.hpp"
-
 
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
 // clang-format off
 using wglCreateContextAttribsARBFunc = HGLRC (*)(HDC, HGLRC, const int*);
-using wglChoosePixelFormatARBFunc    = BOOL (*)(HDC , const int*, const FLOAT*, UINT, int*, UINT*);
+using wglChoosePixelFormatARBFunc    = BOOL  (*)(HDC, const int*, const FLOAT*, UINT, int*, UINT*);
 // clang-format on
 
+namespace {
 constexpr auto APP_TITLE = "OpenGL Vector Camera Demo";
 
 // Windows Vista compositing support.
 #if !defined(PFD_SUPPORT_COMPOSITION)
-#define PFD_SUPPORT_COMPOSITION 0x00008000
+#  define PFD_SUPPORT_COMPOSITION 0x00008000
 #endif
 
 constexpr glm::vec3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
-constexpr float     CAMERA_FOVX = 90.0F;
+constexpr float CAMERA_FOVX = 90.0F;
 constexpr glm::vec3 CAMERA_POS(0.0F, 1.0F, 0.0F);
-constexpr float     CAMERA_SPEED_ROTATION   = 0.2F;
-constexpr float     CAMERA_SPEED_FLIGHT_YAW = 100.0F;
+constexpr float CAMERA_SPEED_ROTATION = 0.2F;
+constexpr float CAMERA_SPEED_FLIGHT_YAW = 100.0F;
 constexpr glm::vec3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
-constexpr float     CAMERA_ZFAR  = 100.0F;
-constexpr float     CAMERA_ZNEAR = 0.1F;
+constexpr float CAMERA_ZFAR = 100.0F;
+constexpr float CAMERA_ZNEAR = 0.1F;
 
-constexpr float FLOOR_WIDTH  = 16.0F;
+constexpr float FLOOR_WIDTH = 16.0F;
 constexpr float FLOOR_HEIGHT = 16.0F;
 constexpr float FLOOR_TILE_S = 8.0F;
 constexpr float FLOOR_TILE_T = 8.0F;
 
 constexpr uint32_t MATRICES_BINDING_POINT = 0;
+}  // namespace
+
 //-----------------------------------------------------------------------------
 // Globals.
 //-----------------------------------------------------------------------------
 
-static HWND      g_hWnd;
-static HDC       g_hDC;
-static HGLRC     g_hContext;
+static HWND g_hWnd;
+static HDC g_hDC;
+static HGLRC g_hContext;
 static HINSTANCE g_hInstance;
-static int       g_framesPerSecond;
-static int       g_windowWidth;
-static int       g_windowHeight;
-static int       g_msaaSamples;
-static int       g_maxAnisotrophy;
-static bool      g_isFullScreen;
-static bool      g_hasFocus;
-static bool      g_enableVerticalSync;
-static bool      g_displayHelp;
-static bool      g_flightModeEnabled;
-static GLuint    g_floorColorMapTexture;
-static GLuint    g_floorLightMapTexture;
-static Camera    g_camera;
+static int g_framesPerSecond;
+static int g_windowWidth;
+static int g_windowHeight;
+static int g_msaaSamples;
+static int g_maxAnisotrophy;
+static bool g_isFullScreen;
+static bool g_hasFocus;
+static bool g_enableVerticalSync;
+static bool g_displayHelp;
+static bool g_flightModeEnabled;
+static GLuint g_floorColorMapTexture;
+static GLuint g_floorLightMapTexture;
+static Camera g_camera;
 static glm::vec3 g_cameraBoundsMax;
 static glm::vec3 g_cameraBoundsMin;
-static float     g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
+static float g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 
 static GLuint g_VAO = 0;
 static GLuint g_VBO = 0;
@@ -100,42 +102,41 @@ static GLint g_uTexture0Locaion;
 static GLint g_uTexture1Locaion;
 
 wglCreateContextAttribsARBFunc wglCreateContextAttribsARB;
-wglChoosePixelFormatARBFunc    wglChoosePixelFormatARB;
+wglChoosePixelFormatARBFunc wglChoosePixelFormatARB;
 
 //-----------------------------------------------------------------------------
 // Functions Prototypes.
 //-----------------------------------------------------------------------------
 
-void    Cleanup();
-void    CleanupApp();
-HWND    CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
-void    EnableVerticalSync(bool enableVerticalSync);
-bool    ExtensionSupported(const char *pszExtensionName);
-float   GetElapsedTimeInSeconds();
-void    GetMovementDirection(glm::vec3 &direction);
-bool    Init();
-void    InitApp();
-void    InitOpenglExtensions();
-void    InitGL();
-void    InitImgui();
-GLuint  LoadTexture(const char *pszFilename);
-GLuint  LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter,
-                    GLenum wrapS, GLenum wrapT);
-void    Log(const char *pszMessage);
-void    PerformCameraCollisionDetection();
-void    ProcessUserInput();
-void    RenderFloor();
-void    RenderFrame();
-void    RenderText();
-void    SetProcessorAffinity();
-void    ToggleFullScreen();
-void    UpdateCamera(float elapsedTimeSec);
-void    UpdateFrame(float elapsedTimeSec);
-void    UpdateFrameRate(float elapsedTimeSec);
+void Cleanup();
+void CleanupApp();
+HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
+void EnableVerticalSync(bool enableVerticalSync);
+bool ExtensionSupported(const char *pszExtensionName);
+float GetElapsedTimeInSeconds();
+void GetMovementDirection(glm::vec3 &direction);
+bool Init();
+void InitApp();
+void InitOpenglExtensions();
+void InitGL();
+void InitImgui();
+GLuint LoadTexture(const char *pszFilename);
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT);
+void Log(const char *pszMessage);
+void PerformCameraCollisionDetection();
+void ProcessUserInput();
+void RenderFloor();
+void RenderFrame();
+void RenderText();
+void SetProcessorAffinity();
+void ToggleFullScreen();
+void UpdateCamera(float elapsedTimeSec);
+void UpdateFrame(float elapsedTimeSec);
+void UpdateFrameRate(float elapsedTimeSec);
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-void    createBuffers();
-void    createUniformBuffers();
-void    createProgram();
+void createBuffers();
+void createUniformBuffers();
+void createProgram();
 
 //-----------------------------------------------------------------------------
 // Functions.
@@ -143,16 +144,16 @@ void    createProgram();
 
 int WINAPI WinMain(HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstance, [[maybe_unused]] LPSTR lpCmdLine, int nShowCmd) {
 #if defined _DEBUG
-    _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+  _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
+  _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 #endif
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    MSG msg = {0};
-    WNDCLASSEX wcl = {0};
+  MSG msg = {0};
+  WNDCLASSEX wcl = {0};
 
-    // clang-format off
+  // clang-format off
     wcl.cbSize        = sizeof(wcl);
     wcl.style         = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
     wcl.lpfnWndProc   = WindowProc;
@@ -165,167 +166,163 @@ int WINAPI WinMain(HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstance
     wcl.lpszMenuName  = 0;
     wcl.lpszClassName = "GLWindowClass";
     wcl.hIconSm       = 0;
-    // clang-format on
+  // clang-format on
 
-    if (!RegisterClassEx(&wcl)) {
-        return EXIT_FAILURE;
-    }
+  if(!RegisterClassEx(&wcl)) {
+    return EXIT_FAILURE;
+  }
 
-    const auto hWnd = CreateAppWindow(wcl, APP_TITLE);
-    if(!hWnd) {
-        Log("Error: CreateAppWindow()");
-    }
-    g_hWnd = hWnd;
+  const auto hWnd = CreateAppWindow(wcl, APP_TITLE);
+  if(!hWnd) {
+    Log("Error: CreateAppWindow()");
+  }
+  g_hWnd = hWnd;
 
-    if(g_hWnd) {
-        SetProcessorAffinity();
+  if(g_hWnd) {
+    SetProcessorAffinity();
 
-        if(Init()) {
-            ShowWindow(g_hWnd, nShowCmd);
-            UpdateWindow(g_hWnd);
+    if(Init()) {
+      ShowWindow(g_hWnd, nShowCmd);
+      UpdateWindow(g_hWnd);
 
-            while(true) {
-                while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
-                    if (msg.message == WM_QUIT) {
-                        break;
-                    }
+      while(true) {
+        while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+          if(msg.message == WM_QUIT) {
+            break;
+          }
 
-                    TranslateMessage(&msg);
-                    DispatchMessage(&msg);
-                }
-
-                if (msg.message == WM_QUIT) {
-                    break;
-                }
-
-                if (g_hasFocus) {
-                    UpdateFrame(GetElapsedTimeInSeconds());
-                    RenderFrame();
-                    SwapBuffers(g_hDC);
-                } else {
-                    WaitMessage();
-                }
-                FrameMark; // NOLINT
-            }
+          TranslateMessage(&msg);
+          DispatchMessage(&msg);
         }
 
-        Cleanup();
-        UnregisterClass(wcl.lpszClassName, hInstance);
+        if(msg.message == WM_QUIT) {
+          break;
+        }
+
+        if(g_hasFocus) {
+          UpdateFrame(GetElapsedTimeInSeconds());
+          RenderFrame();
+          SwapBuffers(g_hDC);
+        } else {
+          WaitMessage();
+        }
+        FrameMark;  // NOLINT
+      }
     }
 
-    return static_cast<int>(msg.wParam);
+    Cleanup();
+    UnregisterClass(wcl.lpszClassName, hInstance);
+  }
+
+  return static_cast<int>(msg.wParam);
 }
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    ZoneScoped; // NOLINT
-    switch (msg) {
-    case WM_ACTIVATE:
-        switch (wParam) {
-        default:
-            break;
+  ZoneScoped;  // NOLINT
+  switch(msg) {
+  case WM_ACTIVATE:
+    switch(wParam) {
+    default: break;
 
-        case WA_ACTIVE:
-        case WA_CLICKACTIVE:
-            Mouse::instance().attach(hWnd);
-            g_hasFocus = true;
-            break;
+    case WA_ACTIVE:
+    case WA_CLICKACTIVE:
+      Mouse::instance().attach(hWnd);
+      g_hasFocus = true;
+      break;
 
-        case WA_INACTIVE:
-            if (g_isFullScreen) {
-                ShowWindow(hWnd, SW_MINIMIZE);
-            }
-            Mouse::instance().detach();
-            g_hasFocus = false;
-            break;
-        }
-        break;
-
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-
-    case WM_SIZE:
-        g_windowWidth  = static_cast<int>(LOWORD(lParam));
-        g_windowHeight = static_cast<int>(HIWORD(lParam));
-        break;
-
-    default:
-        Mouse::instance().handleMsg(hWnd, msg, wParam, lParam);
-        Keyboard::instance().handleMsg(hWnd, msg, wParam, lParam);
-        break;
+    case WA_INACTIVE:
+      if(g_isFullScreen) {
+        ShowWindow(hWnd, SW_MINIMIZE);
+      }
+      Mouse::instance().detach();
+      g_hasFocus = false;
+      break;
     }
+    break;
 
-    return DefWindowProc(hWnd, msg, wParam, lParam);
+  case WM_DESTROY: PostQuitMessage(0); return 0;
+
+  case WM_SIZE:
+    g_windowWidth = static_cast<int>(LOWORD(lParam));
+    g_windowHeight = static_cast<int>(HIWORD(lParam));
+    break;
+
+  default:
+    Mouse::instance().handleMsg(hWnd, msg, wParam, lParam);
+    Keyboard::instance().handleMsg(hWnd, msg, wParam, lParam);
+    break;
+  }
+
+  return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
 void Cleanup() {
-    ZoneScoped; // NOLINT
-    CleanupApp();
+  ZoneScoped;  // NOLINT
+  CleanupApp();
 
-    // Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
+  // Cleanup
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplWin32_Shutdown();
+  ImGui::DestroyContext();
 
-    if (g_hDC) {
-        if(g_hContext) {
-            wglMakeCurrent(g_hDC, 0);
-            wglDeleteContext(g_hContext);
-        }
-
-        ReleaseDC(g_hWnd, g_hDC);
+  if(g_hDC) {
+    if(g_hContext) {
+      wglMakeCurrent(g_hDC, 0);
+      wglDeleteContext(g_hContext);
     }
+
+    ReleaseDC(g_hWnd, g_hDC);
+  }
 }
 
 void CleanupApp() {
-    ZoneScoped; // NOLINT
-    //g_font.destroy();
+  ZoneScoped;  // NOLINT
+  //g_font.destroy();
 
-    glBindVertexArray(0);
-    if(g_VAO != 0) {
-      glDeleteVertexArrays(1, &g_VAO);
-    }
+  glBindVertexArray(0);
+  if(g_VAO != 0) {
+    glDeleteVertexArrays(1, &g_VAO);
+  }
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    if(g_VBO != 0) {
-      glDeleteBuffers(1, &g_VBO);
-    }
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  if(g_VBO != 0) {
+    glDeleteBuffers(1, &g_VBO);
+  }
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    if(g_EBO) {
-      glDeleteBuffers(1, &g_EBO);
-    }
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  if(g_EBO) {
+    glDeleteBuffers(1, &g_EBO);
+  }
 
-    glUseProgram(0);
-    if(g_Program) {
-      glDeleteProgram(g_Program);
-    }
+  glUseProgram(0);
+  if(g_Program) {
+    glDeleteProgram(g_Program);
+  }
 
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
-    if(g_UBO != 0) {
-        glDeleteBuffers(1, &g_UBO);
-    }
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
+  if(g_UBO != 0) {
+    glDeleteBuffers(1, &g_UBO);
+  }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    if (g_floorColorMapTexture) {
-        glDeleteTextures(1, &g_floorColorMapTexture);
-    }
+  glBindTexture(GL_TEXTURE_2D, 0);
+  if(g_floorColorMapTexture) {
+    glDeleteTextures(1, &g_floorColorMapTexture);
+  }
 
-    if (g_floorLightMapTexture) {
-        glDeleteTextures(1, &g_floorLightMapTexture);
-    }
+  if(g_floorLightMapTexture) {
+    glDeleteTextures(1, &g_floorLightMapTexture);
+  }
 }
 
 HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle) {
-    ZoneScoped; // NOLINT
-    // Create a window that is centered on the desktop. It's exactly 1/4 the
-    // size of the desktop. Don't allow it to be resized.
+  ZoneScoped;  // NOLINT
+  // Create a window that is centered on the desktop. It's exactly 1/4 the
+  // size of the desktop. Don't allow it to be resized.
 
-    DWORD wndExStyle = WS_EX_OVERLAPPEDWINDOW;
-    DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-                     WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+  DWORD wndExStyle = WS_EX_OVERLAPPEDWINDOW;
+  DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
 
-    // clang-format off
+  // clang-format off
     HWND hWnd = CreateWindowEx(
       wndExStyle,
       wcl.lpszClassName,
@@ -340,225 +337,221 @@ HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle) {
       wcl.hInstance,
       0
     );
-    // clang-format on
+  // clang-format on
 
-    if (!hWnd) {
-        Log("Error: CreateWindowEx()");
-    }
+  if(!hWnd) {
+    Log("Error: CreateWindowEx()");
+  }
 
-    const int screenWidth      = GetSystemMetrics(SM_CXSCREEN);
-    const int screenHeight     = GetSystemMetrics(SM_CYSCREEN);
-    const int halfScreenWidth  = screenWidth / 2;
-    const int halfScreenHeight = screenHeight / 2;
-    const int left = (screenWidth - halfScreenWidth) / 2;
-    const int top  = (screenHeight - halfScreenHeight) / 2;
+  const int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+  const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+  const int halfScreenWidth = screenWidth / 2;
+  const int halfScreenHeight = screenHeight / 2;
+  const int left = (screenWidth - halfScreenWidth) / 2;
+  const int top = (screenHeight - halfScreenHeight) / 2;
 
-    RECT rc = {0};
-    SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
+  RECT rc = {0};
+  SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
 
-    AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
-    MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
+  AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
+  MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
 
-    GetClientRect(hWnd, &rc);
-    g_windowWidth  = rc.right - rc.left;
-    g_windowHeight = rc.bottom - rc.top;
+  GetClientRect(hWnd, &rc);
+  g_windowWidth = rc.right - rc.left;
+  g_windowHeight = rc.bottom - rc.top;
 
-    return hWnd;
+  return hWnd;
 }
 
 void EnableVerticalSync(bool enableVerticalSync) {
-    ZoneScoped; // NOLINT
-    // WGL_EXT_swap_control.
+  ZoneScoped;  // NOLINT
+  // WGL_EXT_swap_control.
 
-    typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
+  typedef BOOL(WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
 
-    static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
-        reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(
-        wglGetProcAddress("wglSwapIntervalEXT"));
+  static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
+    reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(wglGetProcAddress("wglSwapIntervalEXT"));
 
-    if (wglSwapIntervalEXT)
-    {
-        wglSwapIntervalEXT(enableVerticalSync ? 1 : 0);
-        g_enableVerticalSync = enableVerticalSync;
-    }
+  if(wglSwapIntervalEXT) {
+    wglSwapIntervalEXT(enableVerticalSync ? 1 : 0);
+    g_enableVerticalSync = enableVerticalSync;
+  }
 }
 
 bool ExtensionSupported(const char *pszExtensionName) {
-    ZoneScoped; // NOLINT
-    static const char *pszGLExtensions = 0;
-    static const char *pszWGLExtensions = 0;
+  ZoneScoped;  // NOLINT
+  static const char *pszGLExtensions = 0;
+  static const char *pszWGLExtensions = 0;
 
-    if (!pszGLExtensions)
-        pszGLExtensions = reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS));
+  if(!pszGLExtensions)
+    pszGLExtensions = reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS));
 
-    if (!pszWGLExtensions) {
-        // WGL_ARB_extensions_string.
+  if(!pszWGLExtensions) {
+    // WGL_ARB_extensions_string.
 
-        typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
+    typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
 
-        PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB =
-            reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(
-            wglGetProcAddress("wglGetExtensionsStringARB"));
+    PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB =
+      reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(wglGetProcAddress("wglGetExtensionsStringARB"));
 
-        if (wglGetExtensionsStringARB)
-            pszWGLExtensions = wglGetExtensionsStringARB(wglGetCurrentDC());
-    }
+    if(wglGetExtensionsStringARB)
+      pszWGLExtensions = wglGetExtensionsStringARB(wglGetCurrentDC());
+  }
 
-    if (!strstr(pszGLExtensions, pszExtensionName))
-    {
-        if (!strstr(pszWGLExtensions, pszExtensionName))
-            return false;
-    }
+  if(!strstr(pszGLExtensions, pszExtensionName)) {
+    if(!strstr(pszWGLExtensions, pszExtensionName))
+      return false;
+  }
 
-    return true;
+  return true;
 }
 
 float GetElapsedTimeInSeconds() {
-    ZoneScoped; // NOLINT
-    // Returns the elapsed time (in seconds) since the last time this function
-    // was called. This elaborate setup is to guard against large spikes in
-    // the time returned by QueryPerformanceCounter().
+  ZoneScoped;  // NOLINT
+  // Returns the elapsed time (in seconds) since the last time this function
+  // was called. This elaborate setup is to guard against large spikes in
+  // the time returned by QueryPerformanceCounter().
 
-    static const int MAX_SAMPLE_COUNT = 50;
+  static const int MAX_SAMPLE_COUNT = 50;
 
-    static float frameTimes[MAX_SAMPLE_COUNT];
-    static float timeScale = 0.0f;
-    static float actualElapsedTimeSec = 0.0f;
-    static INT64 freq = 0;
-    static INT64 lastTime = 0;
-    static int sampleCount = 0;
-    static bool initialized = false;
+  static float frameTimes[MAX_SAMPLE_COUNT];
+  static float timeScale = 0.0f;
+  static float actualElapsedTimeSec = 0.0f;
+  static INT64 freq = 0;
+  static INT64 lastTime = 0;
+  static int sampleCount = 0;
+  static bool initialized = false;
 
-    INT64 time = 0;
-    float elapsedTimeSec = 0.0f;
+  INT64 time = 0;
+  float elapsedTimeSec = 0.0f;
 
-    if (!initialized) {
-        initialized = true;
-        QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER*>(&freq));
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&lastTime));
-        timeScale = 1.0F / static_cast<float>(freq);
+  if(!initialized) {
+    initialized = true;
+    QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER *>(&freq));
+    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&lastTime));
+    timeScale = 1.0F / static_cast<float>(freq);
+  }
+
+  QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&time));
+  elapsedTimeSec = static_cast<float>(time - lastTime) * timeScale;
+  lastTime = time;
+
+  if(fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0F) {
+    memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
+    frameTimes[0] = elapsedTimeSec;
+
+    if(sampleCount < MAX_SAMPLE_COUNT) {
+      ++sampleCount;
     }
+  }
 
-    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&time));
-    elapsedTimeSec = static_cast<float>(time - lastTime) * timeScale;
-    lastTime = time;
+  actualElapsedTimeSec = 0.0f;
 
-    if (fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0F) {
-        memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
-        frameTimes[0] = elapsedTimeSec;
+  for(int i = 0; i < sampleCount; ++i) {
+    actualElapsedTimeSec += frameTimes[i];
+  }
 
-        if (sampleCount < MAX_SAMPLE_COUNT) {
-            ++sampleCount;
-        }
-    }
+  if(sampleCount > 0) {
+    actualElapsedTimeSec /= static_cast<float>(sampleCount);
+  }
 
-    actualElapsedTimeSec = 0.0f;
-
-    for (int i = 0; i < sampleCount; ++i) {
-        actualElapsedTimeSec += frameTimes[i];
-    }
-
-    if (sampleCount > 0) {
-        actualElapsedTimeSec /= static_cast<float>(sampleCount);
-    }
-
-    return actualElapsedTimeSec;
+  return actualElapsedTimeSec;
 }
 
 void GetMovementDirection(glm::vec3 &direction) {
-    ZoneScoped; // NOLINT
-    static bool moveForwardsPressed  = false;
-    static bool moveBackwardsPressed = false;
-    static bool moveRightPressed     = false;
-    static bool moveLeftPressed      = false;
-    static bool moveUpPressed        = false;
-    static bool moveDownPressed      = false;
+  ZoneScoped;  // NOLINT
+  static bool moveForwardsPressed = false;
+  static bool moveBackwardsPressed = false;
+  static bool moveRightPressed = false;
+  static bool moveLeftPressed = false;
+  static bool moveUpPressed = false;
+  static bool moveDownPressed = false;
 
-    glm::vec3 velocity   = g_camera.getCurrentVelocity();
-    Keyboard &keyboard = Keyboard::instance();
+  glm::vec3 velocity = g_camera.getCurrentVelocity();
+  Keyboard &keyboard = Keyboard::instance();
 
-    direction = {0.0f, 0.0f, 0.0f};
+  direction = {0.0f, 0.0f, 0.0f};
 
-    if (keyboard.keyDown(Keyboard::KEY_W)) {
-        if (!moveForwardsPressed) {
-            moveForwardsPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
-        }
-
-        direction.z += 1.0f;
-    } else {
-        moveForwardsPressed = false;
+  if(keyboard.keyDown(Keyboard::KEY_W)) {
+    if(!moveForwardsPressed) {
+      moveForwardsPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
     }
 
-    if (keyboard.keyDown(Keyboard::KEY_S)) {
-        if (!moveBackwardsPressed) {
-            moveBackwardsPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
-        }
+    direction.z += 1.0f;
+  } else {
+    moveForwardsPressed = false;
+  }
 
-        direction.z -= 1.0f;
-    } else {
-        moveBackwardsPressed = false;
+  if(keyboard.keyDown(Keyboard::KEY_S)) {
+    if(!moveBackwardsPressed) {
+      moveBackwardsPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
     }
 
-    if (keyboard.keyDown(Keyboard::KEY_D)) {
-        if (!moveRightPressed) {
-            moveRightPressed = true;
-            g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
-        }
+    direction.z -= 1.0f;
+  } else {
+    moveBackwardsPressed = false;
+  }
 
-        direction.x += 1.0f;
-    } else {
-        moveRightPressed = false;
+  if(keyboard.keyDown(Keyboard::KEY_D)) {
+    if(!moveRightPressed) {
+      moveRightPressed = true;
+      g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
     }
 
-    if (keyboard.keyDown(Keyboard::KEY_A)) {
-        if (!moveLeftPressed) {
-            moveLeftPressed = true;
-            g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
-        }
+    direction.x += 1.0f;
+  } else {
+    moveRightPressed = false;
+  }
 
-        direction.x -= 1.0f;
-    } else {
-        moveLeftPressed = false;
+  if(keyboard.keyDown(Keyboard::KEY_A)) {
+    if(!moveLeftPressed) {
+      moveLeftPressed = true;
+      g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
     }
 
-    if (keyboard.keyDown(Keyboard::KEY_E)) {
-        if (!moveUpPressed) {
-            moveUpPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
-        }
+    direction.x -= 1.0f;
+  } else {
+    moveLeftPressed = false;
+  }
 
-        direction.y += 1.0f;
-    } else {
-        moveUpPressed = false;
+  if(keyboard.keyDown(Keyboard::KEY_E)) {
+    if(!moveUpPressed) {
+      moveUpPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
     }
 
-    if (keyboard.keyDown(Keyboard::KEY_Q)) {
-        if (!moveDownPressed) {
-            moveDownPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
-        }
+    direction.y += 1.0f;
+  } else {
+    moveUpPressed = false;
+  }
 
-        direction.y -= 1.0f;
-    } else {
-        moveDownPressed = false;
+  if(keyboard.keyDown(Keyboard::KEY_Q)) {
+    if(!moveDownPressed) {
+      moveDownPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
     }
+
+    direction.y -= 1.0f;
+  } else {
+    moveDownPressed = false;
+  }
 }
 
 bool Init() {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    try {
-        InitGL();
-        InitApp();
-    } catch (const std::exception &e) {
-        const auto errorMessage = fmt::format("Application initialization failed!\n\n{}", e.what());
-        Log(errorMessage.c_str());
-        return false;
-    }
+  try {
+    InitGL();
+    InitApp();
+  } catch(const std::exception &e) {
+    const auto errorMessage = fmt::format("Application initialization failed!\n\n{}", e.what());
+    Log(errorMessage.c_str());
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
 void InitGL() {
@@ -651,15 +644,6 @@ void InitGL() {
   glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
   glDebugMessageCallback(
     [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {
-      /*
-      static FILE* pLogging = fopen("Logging.txt", "w");
-      fprintf(pLogging,
-              "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-              (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-              type,
-              severity,
-              message);
-    */
     },
     0);
 #endif
@@ -672,19 +656,19 @@ void InitGL() {
 }
 
 void InitImgui() {
-    ZoneScoped;  // NOLINT
+  ZoneScoped;  // NOLINT
 
-    // Setup Dear ImGui binding
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    ImGui_ImplWin32_Init(g_hWnd);
-    ImGui_ImplOpenGL3_Init();
+  // Setup Dear ImGui binding
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  ImGui_ImplWin32_Init(g_hWnd);
+  ImGui_ImplOpenGL3_Init();
 }
 
 void InitApp() {
-  ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
   // Load textures.
   g_floorColorMapTexture = LoadTexture("floor_color_map.jpg");
@@ -698,12 +682,7 @@ void InitApp() {
   }
 
   // Setup camera.
-  g_camera.perspective(
-    CAMERA_FOVX,
-    static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-    CAMERA_ZNEAR,
-    CAMERA_ZFAR
-  );
+  g_camera.perspective(CAMERA_FOVX, static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight), CAMERA_ZNEAR, CAMERA_ZFAR);
 
   g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
   g_camera.setPosition(CAMERA_POS);
@@ -736,20 +715,18 @@ void InitOpenglExtensions() {
     throw std::runtime_error("RegisterClassA() failed.");
   }
 
-  HWND dummyWindow = CreateWindowExA(
-    0,
-    tempWindowClass.lpszClassName,
-    "Dummy OpenGL Window",
-    0,
-    CW_USEDEFAULT,
-    CW_USEDEFAULT,
-    CW_USEDEFAULT,
-    CW_USEDEFAULT,
-    0,
-    0,
-    tempWindowClass.hInstance,
-    0
-  );
+  HWND dummyWindow = CreateWindowExA(0,
+                                     tempWindowClass.lpszClassName,
+                                     "Dummy OpenGL Window",
+                                     0,
+                                     CW_USEDEFAULT,
+                                     CW_USEDEFAULT,
+                                     CW_USEDEFAULT,
+                                     CW_USEDEFAULT,
+                                     0,
+                                     0,
+                                     tempWindowClass.hInstance,
+                                     0);
 
   if(!dummyWindow) {
     throw std::runtime_error("CreateWindowExA() failed.");
@@ -788,7 +765,7 @@ void InitOpenglExtensions() {
   }
 
   wglCreateContextAttribsARB = (wglCreateContextAttribsARBFunc)wglGetProcAddress("wglCreateContextAttribsARB");
-  wglChoosePixelFormatARB    = (wglChoosePixelFormatARBFunc)wglGetProcAddress("wglChoosePixelFormatARB");
+  wglChoosePixelFormatARB = (wglChoosePixelFormatARBFunc)wglGetProcAddress("wglChoosePixelFormatARB");
 
   wglMakeCurrent(dummyDC, 0);
   wglDeleteContext(dummyContext);
@@ -797,144 +774,140 @@ void InitOpenglExtensions() {
 }
 
 GLuint LoadTexture(const char *pszFilename) {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR,
-        GL_REPEAT, GL_REPEAT);
+  return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_REPEAT);
 }
 
-GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter,
-                   GLenum wrapS, GLenum wrapT) {
-    ZoneScoped; // NOLINT
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT) {
+  ZoneScoped;  // NOLINT
 
-    GLuint id = 0;
-    int width, height, channels;
-    stbi_set_flip_vertically_on_load(1);
-    void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
+  GLuint id = 0;
+  int width, height, channels;
+  stbi_set_flip_vertically_on_load(1);
+  void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
-    if(pImage != nullptr) {
-        glCreateTextures(GL_TEXTURE_2D, 1, &id);
+  if(pImage != nullptr) {
+    glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, magFilter);
-        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTextureParameteri(id, GL_TEXTURE_WRAP_S,     wrapS);
-        glTextureParameteri(id, GL_TEXTURE_WRAP_T,     wrapT);
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, magFilter);
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, wrapS);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, wrapT);
 
-        glTextureStorage2D(id,  1, GL_RGBA8, width, height);
-        glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
-        if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
-          glGenerateTextureMipmap(id);
-        }
-        glTextureParameteri(id, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
-
-        stbi_image_free(pImage);
+    glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+    glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+    if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
+      glGenerateTextureMipmap(id);
     }
+    glTextureParameteri(id, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
 
-    return id;
+    stbi_image_free(pImage);
+  }
+
+  return id;
 }
 
 void Log(const char *pszMessage) {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
+  MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
 }
 
 void PerformCameraCollisionDetection() {
-    ZoneScoped; // NOLINT
-    const glm::vec3 &pos = g_camera.getPosition();
-    glm::vec3 newPos(pos);
+  ZoneScoped;  // NOLINT
+  const glm::vec3 &pos = g_camera.getPosition();
+  glm::vec3 newPos(pos);
 
-    if (pos.x > g_cameraBoundsMax.x)
-        newPos.x = g_cameraBoundsMax.x;
+  if(pos.x > g_cameraBoundsMax.x)
+    newPos.x = g_cameraBoundsMax.x;
 
-    if (pos.x < g_cameraBoundsMin.x)
-        newPos.x = g_cameraBoundsMin.x;
+  if(pos.x < g_cameraBoundsMin.x)
+    newPos.x = g_cameraBoundsMin.x;
 
-    if (pos.y > g_cameraBoundsMax.y)
-        newPos.y = g_cameraBoundsMax.y;
+  if(pos.y > g_cameraBoundsMax.y)
+    newPos.y = g_cameraBoundsMax.y;
 
-    if (pos.y < g_cameraBoundsMin.y)
-        newPos.y = g_cameraBoundsMin.y;
+  if(pos.y < g_cameraBoundsMin.y)
+    newPos.y = g_cameraBoundsMin.y;
 
-    if (pos.z > g_cameraBoundsMax.z)
-        newPos.z = g_cameraBoundsMax.z;
+  if(pos.z > g_cameraBoundsMax.z)
+    newPos.z = g_cameraBoundsMax.z;
 
-    if (pos.z < g_cameraBoundsMin.z)
-        newPos.z = g_cameraBoundsMin.z;
+  if(pos.z < g_cameraBoundsMin.z)
+    newPos.z = g_cameraBoundsMin.z;
 
-    g_camera.setPosition(newPos);
+  g_camera.setPosition(newPos);
 }
 
 void ProcessUserInput() {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    Keyboard &keyboard = Keyboard::instance();
-    Mouse &mouse = Mouse::instance();
+  Keyboard &keyboard = Keyboard::instance();
+  Mouse &mouse = Mouse::instance();
 
-    if (keyboard.keyPressed(Keyboard::KEY_ESCAPE))
-        PostMessage(g_hWnd, WM_CLOSE, 0, 0);
+  if(keyboard.keyPressed(Keyboard::KEY_ESCAPE))
+    PostMessage(g_hWnd, WM_CLOSE, 0, 0);
 
-    if (keyboard.keyDown(Keyboard::KEY_LALT) || keyboard.keyDown(Keyboard::KEY_RALT)) {
-        if (keyboard.keyPressed(Keyboard::KEY_ENTER))
-            ToggleFullScreen();
+  if(keyboard.keyDown(Keyboard::KEY_LALT) || keyboard.keyDown(Keyboard::KEY_RALT)) {
+    if(keyboard.keyPressed(Keyboard::KEY_ENTER))
+      ToggleFullScreen();
+  }
+
+  if(keyboard.keyPressed(Keyboard::KEY_H))
+    g_displayHelp = !g_displayHelp;
+
+  if(keyboard.keyPressed(Keyboard::KEY_M))
+    mouse.smoothMouse(!mouse.isMouseSmoothing());
+
+  if(keyboard.keyPressed(Keyboard::KEY_V))
+    EnableVerticalSync(!g_enableVerticalSync);
+
+  if(keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD)) {
+    g_cameraRotationSpeed += 0.01f;
+
+    if(g_cameraRotationSpeed > 1.0f)
+      g_cameraRotationSpeed = 1.0f;
+  }
+
+  if(keyboard.keyPressed(Keyboard::KEY_SUBTRACT) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT)) {
+    g_cameraRotationSpeed -= 0.01f;
+
+    if(g_cameraRotationSpeed <= 0.0f)
+      g_cameraRotationSpeed = 0.01f;
+  }
+
+  if(keyboard.keyPressed(Keyboard::KEY_PERIOD)) {
+    mouse.setWeightModifier(mouse.weightModifier() + 0.1f);
+
+    if(mouse.weightModifier() > 1.0f)
+      mouse.setWeightModifier(1.0f);
+  }
+
+  if(keyboard.keyPressed(Keyboard::KEY_COMMA)) {
+    mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
+
+    if(mouse.weightModifier() < 0.0f) {
+      mouse.setWeightModifier(0.0f);
     }
+  }
 
-    if (keyboard.keyPressed(Keyboard::KEY_H))
-        g_displayHelp = !g_displayHelp;
+  if(keyboard.keyPressed(Keyboard::KEY_SPACE)) {
+    g_flightModeEnabled = !g_flightModeEnabled;
 
-    if (keyboard.keyPressed(Keyboard::KEY_M))
-        mouse.smoothMouse(!mouse.isMouseSmoothing());
+    if(g_flightModeEnabled) {
+      g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT);
+    } else {
+      const glm::vec3 &cameraPos = g_camera.getPosition();
 
-    if (keyboard.keyPressed(Keyboard::KEY_V))
-        EnableVerticalSync(!g_enableVerticalSync);
-
-    if (keyboard.keyPressed(Keyboard::KEY_ADD) ||
-        keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD)) {
-        g_cameraRotationSpeed += 0.01f;
-
-        if (g_cameraRotationSpeed > 1.0f)
-            g_cameraRotationSpeed = 1.0f;
+      g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
+      g_camera.setPosition(cameraPos.x, CAMERA_POS.y, cameraPos.z);
     }
-
-    if (keyboard.keyPressed(Keyboard::KEY_SUBTRACT) ||
-        keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT)) {
-        g_cameraRotationSpeed -= 0.01f;
-
-        if (g_cameraRotationSpeed <= 0.0f)
-            g_cameraRotationSpeed = 0.01f;
-    }
-
-    if (keyboard.keyPressed(Keyboard::KEY_PERIOD)) {
-        mouse.setWeightModifier(mouse.weightModifier() + 0.1f);
-
-        if (mouse.weightModifier() > 1.0f)
-            mouse.setWeightModifier(1.0f);
-    }
-
-    if (keyboard.keyPressed(Keyboard::KEY_COMMA)) {
-        mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
-
-        if (mouse.weightModifier() < 0.0f) {
-            mouse.setWeightModifier(0.0f);
-        }
-    }
-
-    if (keyboard.keyPressed(Keyboard::KEY_SPACE)) {
-        g_flightModeEnabled = !g_flightModeEnabled;
-
-        if (g_flightModeEnabled) {
-            g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT);
-        } else {
-            const glm::vec3 &cameraPos = g_camera.getPosition();
-
-            g_camera.setBehavior(Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON);
-            g_camera.setPosition(cameraPos.x, CAMERA_POS.y, cameraPos.z);
-        }
-    }
+  }
 }
 
 void RenderFloor() {
-  ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
   glUseProgram(g_Program);
 
@@ -947,8 +920,8 @@ void RenderFloor() {
   glUniform1i(g_uTexture1Locaion, FloorLightTextureId);
 
   constexpr auto PositionID = 0;
-  constexpr auto UV1ID      = 1;
-  constexpr auto UV2ID      = 2;
+  constexpr auto UV1ID = 1;
+  constexpr auto UV2ID = 2;
 
   glBindVertexBuffer(0, g_VBO, 0, sizeof(float) * 7);
 
@@ -960,26 +933,26 @@ void RenderFloor() {
   const auto offset2 = (sizeof(glm::vec3) + sizeof(glm::vec2));
 
   glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, 0);
-  glVertexAttribFormat(UV1ID,      2, GL_FLOAT, GL_FALSE, offset1);
-  glVertexAttribFormat(UV2ID,      2, GL_FLOAT, GL_FALSE, offset2);
+  glVertexAttribFormat(UV1ID, 2, GL_FLOAT, GL_FALSE, offset1);
+  glVertexAttribFormat(UV2ID, 2, GL_FLOAT, GL_FALSE, offset2);
 
   glVertexAttribBinding(PositionID, 0);
-  glVertexAttribBinding(UV1ID,      0);
-  glVertexAttribBinding(UV2ID,      0);
+  glVertexAttribBinding(UV1ID, 0);
+  glVertexAttribBinding(UV2ID, 0);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_EBO);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
 }
 
 void RenderFrame() {
-  ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
   // Start the ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplWin32_NewFrame();
   ImGui::NewFrame();
 
-  { // Imgui
+  {  // Imgui
     RenderText();
   }
   ImGui::Render();
@@ -992,9 +965,8 @@ void RenderFrame() {
   glClear(GL_COLOR_BUFFER_BIT);
 
   const auto projection = g_camera.getProjectionMatrix();
-  const auto view       = g_camera.getViewMatrix();
+  const auto view = g_camera.getViewMatrix();
   const auto MVP = projection * view;
-  const auto MVP        = projection * view;
 
   glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
   glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
@@ -1007,16 +979,13 @@ void RenderFrame() {
 }
 
 void RenderText() {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(g_windowWidth/2, g_windowHeight));
-    ImGui::Begin("Text", nullptr, ImGuiWindowFlags_NoBackground |
-                                  ImGuiWindowFlags_NoTitleBar   |
-                                  ImGuiWindowFlags_NoResize     |
-                                  ImGuiWindowFlags_NoSavedSettings);
-    if (g_displayHelp) {
-        ImGui::Text("%s", R"(First person camera behavior
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowWidth) / 2.0F, static_cast<float>(g_windowHeight)));
+  ImGui::Begin("Text", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
+  if(g_displayHelp) {
+    ImGui::Text("%s", R"(First person camera behavior
   Press W and S to move forwards and backwards
   Press A and D to strafe left and right
   Press E and Q to move up and down
@@ -1037,10 +1006,10 @@ Press ALT and ENTER to toggle full screen
 Press ESC to exit
 
 Press H to hide help)");
-    } else {
-        Mouse &mouse = Mouse::instance();
-        const auto output = fmt::format(
-R"(FPS: {}
+  } else {
+    Mouse &mouse = Mouse::instance();
+    const auto output = fmt::format(
+      R"(FPS: {}
 Multisample anti-aliasing: {} x
 Anisotropic filtering: {} x
 Vertical sync: {}
@@ -1062,176 +1031,163 @@ Mouse
   Sensitivity: {}
 
 Press H to display help)",
-          g_framesPerSecond,
-          g_msaaSamples,
-          g_maxAnisotrophy,
-          (g_enableVerticalSync ? "enabled" : "disabled"),
-          g_camera.getPosition().x,
-          g_camera.getPosition().y,
-          g_camera.getPosition().z,
-          g_camera.getCurrentVelocity().x,
-          g_camera.getCurrentVelocity().y,
-          g_camera.getCurrentVelocity().z,
-          g_cameraRotationSpeed,
-          (g_flightModeEnabled ? "Flight" : "First person"),
-          (mouse.isMouseSmoothing() ? "enabled" : "disabled"),
-          mouse.weightModifier()
-);
-        ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", output.c_str());
-    }
-    ImGui::End();
-    //g_font.begin();
-    //g_font.setColor(1.0f, 1.0f, 0.0f);
-    //g_font.drawText(1, 1, output.str().c_str());
-    //g_font.end();
+      g_framesPerSecond,
+      g_msaaSamples,
+      g_maxAnisotrophy,
+      (g_enableVerticalSync ? "enabled" : "disabled"),
+      g_camera.getPosition().x,
+      g_camera.getPosition().y,
+      g_camera.getPosition().z,
+      g_camera.getCurrentVelocity().x,
+      g_camera.getCurrentVelocity().y,
+      g_camera.getCurrentVelocity().z,
+      g_cameraRotationSpeed,
+      (g_flightModeEnabled ? "Flight" : "First person"),
+      (mouse.isMouseSmoothing() ? "enabled" : "disabled"),
+      mouse.weightModifier());
+    ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", output.c_str());
+  }
+  ImGui::End();
 }
 
 void SetProcessorAffinity() {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    // Assign the current thread to one processor. This ensures that timing
-    // code runs on only one processor, and will not suffer any ill effects
-    // from power management.
-    //
-    // Based on DXUTSetProcessorAffinity() function from the DXUT framework.
+  // Assign the current thread to one processor. This ensures that timing
+  // code runs on only one processor, and will not suffer any ill effects
+  // from power management.
+  //
+  // Based on DXUTSetProcessorAffinity() function from the DXUT framework.
 
-    DWORD_PTR dwProcessAffinityMask = 0;
-    DWORD_PTR dwSystemAffinityMask = 0;
-    HANDLE hCurrentProcess = GetCurrentProcess();
+  DWORD_PTR dwProcessAffinityMask = 0;
+  DWORD_PTR dwSystemAffinityMask = 0;
+  HANDLE hCurrentProcess = GetCurrentProcess();
 
-    if (!GetProcessAffinityMask(hCurrentProcess, &dwProcessAffinityMask, &dwSystemAffinityMask))
-        return;
+  if(!GetProcessAffinityMask(hCurrentProcess, &dwProcessAffinityMask, &dwSystemAffinityMask))
+    return;
 
-    if (dwProcessAffinityMask)
-    {
-        // Find the lowest processor that our process is allowed to run against.
+  if(dwProcessAffinityMask) {
+    // Find the lowest processor that our process is allowed to run against.
 
-        DWORD_PTR dwAffinityMask = (dwProcessAffinityMask & ((~dwProcessAffinityMask) + 1));
+    DWORD_PTR dwAffinityMask = (dwProcessAffinityMask & ((~dwProcessAffinityMask) + 1));
 
-        // Set this as the processor that our thread must always run against.
-        // This must be a subset of the process affinity mask.
+    // Set this as the processor that our thread must always run against.
+    // This must be a subset of the process affinity mask.
 
-        HANDLE hCurrentThread = GetCurrentThread();
+    HANDLE hCurrentThread = GetCurrentThread();
 
-        if (hCurrentThread != INVALID_HANDLE_VALUE)
-        {
-            SetThreadAffinityMask(hCurrentThread, dwAffinityMask);
-            CloseHandle(hCurrentThread);
-        }
+    if(hCurrentThread != INVALID_HANDLE_VALUE) {
+      SetThreadAffinityMask(hCurrentThread, dwAffinityMask);
+      CloseHandle(hCurrentThread);
     }
+  }
 
-    CloseHandle(hCurrentProcess);
+  CloseHandle(hCurrentProcess);
 }
 
 void ToggleFullScreen() {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    static DWORD savedExStyle;
-    static DWORD savedStyle;
-    static RECT rcSaved;
+  static DWORD savedExStyle;
+  static DWORD savedStyle;
+  static RECT rcSaved;
 
-    g_isFullScreen = !g_isFullScreen;
+  g_isFullScreen = !g_isFullScreen;
 
-    if (g_isFullScreen) {
-        // Moving to full screen mode.
+  if(g_isFullScreen) {
+    // Moving to full screen mode.
 
-        savedExStyle = static_cast<DWORD>(GetWindowLong(g_hWnd, GWL_EXSTYLE));
-        savedStyle   = static_cast<DWORD>(GetWindowLong(g_hWnd, GWL_STYLE));
-        GetWindowRect(g_hWnd, &rcSaved);
+    savedExStyle = static_cast<DWORD>(GetWindowLong(g_hWnd, GWL_EXSTYLE));
+    savedStyle = static_cast<DWORD>(GetWindowLong(g_hWnd, GWL_STYLE));
+    GetWindowRect(g_hWnd, &rcSaved);
 
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, 0);
-        SetWindowLong(g_hWnd, GWL_STYLE, WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-        SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    SetWindowLong(g_hWnd, GWL_EXSTYLE, 0);
+    SetWindowLong(g_hWnd, GWL_STYLE, WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+    SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
 
-        g_windowWidth = GetSystemMetrics(SM_CXSCREEN);
-        g_windowHeight = GetSystemMetrics(SM_CYSCREEN);
+    g_windowWidth = GetSystemMetrics(SM_CXSCREEN);
+    g_windowHeight = GetSystemMetrics(SM_CYSCREEN);
 
-        SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0,
-            g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    } else {
-        // Moving back to windowed mode.
+    SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
+  } else {
+    // Moving back to windowed mode.
 
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, static_cast<LONG>(savedExStyle));
-        SetWindowLong(g_hWnd, GWL_STYLE,   static_cast<LONG>(savedStyle));
-        SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    SetWindowLong(g_hWnd, GWL_EXSTYLE, static_cast<LONG>(savedExStyle));
+    SetWindowLong(g_hWnd, GWL_STYLE, static_cast<LONG>(savedStyle));
+    SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
 
-        g_windowWidth = rcSaved.right - rcSaved.left;
-        g_windowHeight = rcSaved.bottom - rcSaved.top;
+    g_windowWidth = rcSaved.right - rcSaved.left;
+    g_windowHeight = rcSaved.bottom - rcSaved.top;
 
-        SetWindowPos(g_hWnd, HWND_NOTOPMOST, rcSaved.left, rcSaved.top,
-            g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    }
+    SetWindowPos(g_hWnd, HWND_NOTOPMOST, rcSaved.left, rcSaved.top, g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
+  }
 
-    g_camera.perspective(CAMERA_FOVX,
-        static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-        CAMERA_ZNEAR, CAMERA_ZFAR);
+  g_camera.perspective(CAMERA_FOVX, static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight), CAMERA_ZNEAR, CAMERA_ZFAR);
 }
 
 void UpdateCamera(float elapsedTimeSec) {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    float heading = 0.0f;
-    float pitch   = 0.0f;
-    float roll    = 0.0f;
-    glm::vec3 direction;
-    Mouse &mouse = Mouse::instance();
+  float heading = 0.0f;
+  float pitch = 0.0f;
+  float roll = 0.0f;
+  glm::vec3 direction;
+  Mouse &mouse = Mouse::instance();
 
-    GetMovementDirection(direction);
+  GetMovementDirection(direction);
 
-    switch (g_camera.getBehavior()) {
-    case Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON:
-        pitch   =  mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
-        heading = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
+  switch(g_camera.getBehavior()) {
+  case Camera::CameraBehavior::CAMERA_BEHAVIOR_FIRST_PERSON:
+    pitch = mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
+    heading = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
-        g_camera.rotate(heading, pitch, 0.0f);
-        break;
+    g_camera.rotate(heading, pitch, 0.0f);
+    break;
 
-    case Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT:
-        heading = -direction.x * CAMERA_SPEED_FLIGHT_YAW * elapsedTimeSec;
-        pitch   = -mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
-        roll    = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
+  case Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT:
+    heading = -direction.x * CAMERA_SPEED_FLIGHT_YAW * elapsedTimeSec;
+    pitch = -mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
+    roll = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
-        g_camera.rotate(heading, pitch, roll);
-        direction.x = 0.0f; // ignore yaw motion when updating camera velocity
-        break;
-    }
+    g_camera.rotate(heading, pitch, roll);
+    direction.x = 0.0f;  // ignore yaw motion when updating camera velocity
+    break;
+  }
 
-    g_camera.updatePosition(direction, elapsedTimeSec);
-    PerformCameraCollisionDetection();
+  g_camera.updatePosition(direction, elapsedTimeSec);
+  PerformCameraCollisionDetection();
 
-    mouse.moveToWindowCenter();
+  mouse.moveToWindowCenter();
 }
 
 void UpdateFrame(float elapsedTimeSec) {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    UpdateFrameRate(elapsedTimeSec);
+  UpdateFrameRate(elapsedTimeSec);
 
-    Mouse::instance().update();
-    Keyboard::instance().update();
+  Mouse::instance().update();
+  Keyboard::instance().update();
 
-    UpdateCamera(elapsedTimeSec);
-    ProcessUserInput();
+  UpdateCamera(elapsedTimeSec);
+  ProcessUserInput();
 }
 
 void UpdateFrameRate(float elapsedTimeSec) {
-    ZoneScoped; // NOLINT
+  ZoneScoped;  // NOLINT
 
-    static float accumTimeSec = 0.0f;
-    static int frames = 0;
+  static float accumTimeSec = 0.0f;
+  static int frames = 0;
 
-    accumTimeSec += elapsedTimeSec;
+  accumTimeSec += elapsedTimeSec;
 
-    if (accumTimeSec > 1.0f) {
-        g_framesPerSecond = frames;
+  if(accumTimeSec > 1.0f) {
+    g_framesPerSecond = frames;
 
-        frames = 0;
-        accumTimeSec = 0.0f;
-    } else {
-        ++frames;
-    }
+    frames = 0;
+    accumTimeSec = 0.0f;
+  } else {
+    ++frames;
+  }
 }
 
 void createBuffers() {
@@ -1273,7 +1229,7 @@ void createUniformBuffers() {
 void createProgram() {
   ZoneScoped;  // NOLINT
 
-  constexpr std::string_view VertexShader   = R"(
+  constexpr std::string_view VertexShader = R"(
   #version 460 core
 
   layout(location=0) in vec3 aPosition;
@@ -1314,9 +1270,9 @@ void createProgram() {
   }
   )";
 
-  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER,   VertexShader.data());
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER, VertexShader.data());
   if(vertexShader == -1) {
-      std::exit(EXIT_FAILURE);
+    std::exit(EXIT_FAILURE);
   }
 
   const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());

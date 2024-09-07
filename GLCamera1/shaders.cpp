@@ -1,9 +1,11 @@
 // Internal
 #include "shaders.hpp"
 
-inline constexpr auto InvalidShader  = -1;
-inline constexpr auto InvalidProgram = -1;
-inline constexpr auto MessageLength = 512;
+namespace {
+constexpr auto InvalidShader = -1;
+constexpr auto InvalidProgram = -1;
+constexpr auto MessageLength = 512;
+}  // namespace
 
 namespace Shaders {
 
@@ -56,4 +58,3 @@ GLint createProgram(GLint vertexShaderID, GLint fragmentShaderID) {
 }
 
 }  // namespace Shaders
-

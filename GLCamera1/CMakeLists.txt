@@ -25,8 +25,6 @@ target_link_libraries(
     Imgui::Win32
     stb::image
     OpenGL::GL
-    OpenGL::GLU
-    #tracy::tracy
     options::options
 )
 
@@ -34,6 +32,7 @@ target_compile_definitions(
     GLCamera1
     PRIVATE
     #OPENG_DEBUG
+    GLM_ENABLE_EXPERIMENTAL
 )
 
 set_target_properties(

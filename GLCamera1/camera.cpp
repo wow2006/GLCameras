@@ -20,7 +20,7 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 // Internal
-#include "camera.h"
+#include "camera.hpp"
 
 Camera::Camera() {
   ZoneScoped;  // NOLINT
