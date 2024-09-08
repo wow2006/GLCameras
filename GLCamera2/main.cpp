@@ -29,15 +29,12 @@
 //-----------------------------------------------------------------------------
 // stb
 #include <stb_image.h>
-// GL
-#include <GL/gl.h>
-#include <GL/glu.h>
 // SDL2
 #include <SDL2/SDL.h>
-
-#include "GL_ARB_multitexture.h"
+//
 #include "camera.hpp"
 #include "input.hpp"
+#include "shaders.hpp"
 
 //-----------------------------------------------------------------------------
 // Constants.
@@ -63,6 +60,8 @@ constexpr float FLOOR_WIDTH = 16.0F;
 constexpr float FLOOR_HEIGHT = 16.0F;
 constexpr float FLOOR_TILE_S = 8.0F;
 constexpr float FLOOR_TILE_T = 8.0F;
+
+constexpr uint32_t MATRICES_BINDING_POINT = 0;
 }  // namespace
 
 //-----------------------------------------------------------------------------
@@ -88,6 +87,15 @@ float g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 SDL_Window *g_pWindow = nullptr;
 SDL_GLContext g_glcontext = nullptr;
 
+static GLuint g_VAO = 0;
+static GLuint g_VBO = 0;
+static GLuint g_EBO = 0;
+static GLuint g_UBO = 0;
+static GLuint g_Program = 0;
+
+static GLint g_uTexture0Locaion;
+static GLint g_uTexture1Locaion;
+
 //-----------------------------------------------------------------------------
 // Functions Prototypes.
 //-----------------------------------------------------------------------------
@@ -101,7 +109,7 @@ bool Init();
 void InitApp();
 void InitGL();
 GLuint LoadTexture(const char *pszFilename);
-GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter, GLint wrapS, GLint wrapT);
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT);
 void Log(const char *pszMessage);
 void PerformCameraCollisionDetection();
 void ProcessUserInput();
@@ -112,6 +120,9 @@ void UpdateCamera(float elapsedTimeSec);
 void UpdateFrame(float elapsedTimeSec);
 void UpdateFrameRate(float elapsedTimeSec);
 void ToggleFullScreen();
+void createBuffers();
+void createUniformBuffers();
+void createProgram();
 
 //-----------------------------------------------------------------------------
 // Functions.
@@ -349,27 +360,16 @@ void GetMovementDirection(Vector3 &direction) {
 bool Init() {
   try {
     InitGL();
-
-    if(!SDL_GL_ExtensionSupported("GL_ARB_multitexture")) {
-      throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
-    }
-
     InitApp();
-    return true;
   } catch(const std::exception &e) {
-    std::ostringstream msg;
-
-    msg << "Application initialization failed!" << std::endl << std::endl;
-    msg << e.what();
-
-    Log(msg.str().c_str());
+    const auto errorMessage = fmt::format("Application initialization failed!\n\n{}", e.what());
+    Log(errorMessage.c_str());
     return false;
   }
+  return true;
 }
 
 void InitApp() {
-  // TODO: Setup fonts.
-
   // Load textures.
   if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg"))) {
     throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
@@ -393,31 +393,9 @@ void InitApp() {
   // Mouse::instance().hideCursor(true);
   Mouse::instance().moveToWindowCenter();
 
-  // Setup display list for the floor.
-  g_floorDisplayList = glGenLists(1);
-  glNewList(g_floorDisplayList, GL_COMPILE);
-  {
-    glBegin(GL_QUADS);
-    {
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0F, 0.0F);
-      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0F, 0.0F);
-      glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0F, FLOOR_HEIGHT * 0.5f);
-
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0F);
-      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0F, 0.0F);
-      glVertex3f(FLOOR_WIDTH * 0.5f, 0.0F, FLOOR_HEIGHT * 0.5f);
-
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
-      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0F, 1.0F);
-      glVertex3f(FLOOR_WIDTH * 0.5f, 0.0F, -FLOOR_HEIGHT * 0.5f);
-
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
-      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0F, 1.0F);
-      glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0F, -FLOOR_HEIGHT * 0.5f);
-    }
-    glEnd();
-  }
-  glEndList();
+  createBuffers();
+  createUniformBuffers();
+  createProgram();
 }
 
 void InitGL() {
@@ -440,23 +418,51 @@ void InitGL() {
     Log("Failed to set the DoubleBuffer");
   }
 
+#ifdef OPENGL_DEBUG
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG) < 0) {
+    Log("Failed to set OpenGL debug flag");
+  }
+#endif
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE) < 0) {
+    Log("Failed to set core context");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0) {
+    Log("Failed to set major version to 4");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6) < 0) {
+    Log("Failed to set major version to 6");
+  }
+
   g_glcontext = SDL_GL_CreateContext(g_pWindow);
+  if(nullptr == g_glcontext) {
+    throw std::runtime_error("Failed to create OpenGL Context");
+  }
+  SDL_GL_MakeCurrent(g_pWindow, g_glcontext);
 
   SDL_GL_SetSwapInterval(1);
 
+  glbinding::initialize([](const char *name) { return (glbinding::ProcAddress)SDL_GL_GetProcAddress(name); });
+
+#ifdef OPENGL_DEBUG
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback(
+    [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {}, 0);
+#endif
+
   // Check for GL_EXT_texture_filter_anisotropic support.
-  if(SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic")) {
-    glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
-  } else {
-    g_maxAnisotrophy = 1;
-  }
+  // if(SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic")) {
+  //   glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
+  // } else {
+  g_maxAnisotrophy = 1;
+  // }
 }
 
 GLuint LoadTexture(const char *pszFilename) {
   return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_REPEAT);
 }
 
-GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter, GLint wrapS, GLint wrapT) {
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT) {
   ZoneScoped;  // NOLINT
 
   GLuint id = 0;
@@ -464,26 +470,23 @@ GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter, GL
   stbi_set_flip_vertically_on_load(1);
   void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
-  if(nullptr == pImage) {
-    MessageBox(0, "Failed to load the texture", "Error", MB_ICONSTOP);
-    return id;
+  if(pImage != nullptr) {
+    glCreateTextures(GL_TEXTURE_2D, 1, &id);
+
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, magFilter);
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, wrapS);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, wrapT);
+
+    glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+    glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+    if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
+      glGenerateTextureMipmap(id);
+    }
+    glTextureParameteri(id, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
+
+    stbi_image_free(pImage);
   }
-
-  glGenTextures(1, &id);
-  glBindTexture(GL_TEXTURE_2D, id);
-
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
-
-  if(g_maxAnisotrophy > 1) {
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, g_maxAnisotrophy);
-  }
-
-  gluBuild2DMipmaps(GL_TEXTURE_2D, 4, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
-
-  stbi_image_free(pImage);
 
   return id;
 }
@@ -586,41 +589,60 @@ void ProcessUserInput() {
 }
 
 void RenderFloor() {
-  glActiveTextureARB(GL_TEXTURE0_ARB);
-  glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
+  ZoneScoped;  // NOLINT
 
-  glActiveTextureARB(GL_TEXTURE1_ARB);
-  glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
+  glUseProgram(g_Program);
 
-  glCallList(g_floorDisplayList);
+  constexpr auto FloorTextureId = 0;
+  glBindTextureUnit(FloorTextureId, g_floorColorMapTexture);
+  glUniform1i(g_uTexture0Locaion, FloorTextureId);
 
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glDisable(GL_TEXTURE_2D);
+  constexpr auto FloorLightTextureId = 1;
+  glBindTextureUnit(FloorLightTextureId, g_floorLightMapTexture);
+  glUniform1i(g_uTexture1Locaion, FloorLightTextureId);
 
-  glActiveTextureARB(GL_TEXTURE0_ARB);
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glDisable(GL_TEXTURE_2D);
+  constexpr auto PositionID = 0;
+  constexpr auto UV1ID = 1;
+  constexpr auto UV2ID = 2;
+
+  glBindVertexBuffer(0, g_VBO, 0, sizeof(float) * 7);
+
+  glEnableVertexAttribArray(PositionID);
+  glEnableVertexAttribArray(UV1ID);
+  glEnableVertexAttribArray(UV2ID);
+
+  const auto offset1 = sizeof(glm::vec3);
+  const auto offset2 = (sizeof(glm::vec3) + sizeof(glm::vec2));
+
+  glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, 0);
+  glVertexAttribFormat(UV1ID, 2, GL_FLOAT, GL_FALSE, offset1);
+  glVertexAttribFormat(UV2ID, 2, GL_FLOAT, GL_FALSE, offset2);
+
+  glVertexAttribBinding(PositionID, 0);
+  glVertexAttribBinding(UV1ID, 0);
+  glVertexAttribBinding(UV2ID, 0);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_EBO);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
 }
 
 void RenderFrame() {
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_CULL_FACE);
-  glDisable(GL_LIGHTING);
+  ZoneScoped;  // NOLINT
 
   glViewport(0, 0, g_windowResolution.x, g_windowResolution.y);
   glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT);
 
-  glMatrixMode(GL_PROJECTION);
-  glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
+  const auto projection = g_camera.getProjectionMatrix().toGlm();
+  const auto view = g_camera.getViewMatrix().toGlm();
+  const auto MVP = projection * view;
 
-  glMatrixMode(GL_MODELVIEW);
-  glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
+  glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
+  glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(MVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
   RenderFloor();
-  // RenderText();
 }
 
 void RenderText() {
@@ -736,4 +758,114 @@ void UpdateFrameRate(float elapsedTimeSec) {
 
 void ToggleFullScreen() {
   // TODO(Hussein): Implement me
+}
+
+void createBuffers() {
+  ZoneScoped;  // NOLINT
+
+  glGenVertexArrays(1, &g_VAO);
+  glBindVertexArray(g_VAO);
+
+  // clang-format off
+  constexpr std::array<uint16_t, 6>  elements = {
+      3, 1, 0,
+      3, 2, 1
+  };
+  constexpr std::array<float, 4 * 7> vertices = {
+    -FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, 0.0F,         0.0F,         0.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, 0.0F,         1.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, FLOOR_TILE_T, 1.0F, 1.0F,
+    -FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, 0.00F,        FLOOR_TILE_T, 0.0F, 1.0F,
+  };
+
+  constexpr auto verteicesSize = vertices.size() * sizeof(float);
+
+  glCreateBuffers(1, &g_VBO);
+  glNamedBufferStorage(g_VBO, verteicesSize, vertices.data(), GL_DYNAMIC_STORAGE_BIT);
+  // clang-format on
+
+  constexpr auto ElementsSize = static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t));
+  glCreateBuffers(1, &g_EBO);
+  glNamedBufferStorage(g_EBO, ElementsSize, elements.data(), GL_DYNAMIC_STORAGE_BIT);
+}
+
+inline size_t uboAligned(size_t size) { return ((size + 255) / 256) * 256; }
+
+void createUniformBuffers() {
+  glCreateBuffers(1, &g_UBO);
+  glNamedBufferStorage(g_UBO, uboAligned(sizeof(glm::mat4)), nullptr, GL_DYNAMIC_STORAGE_BIT);
+}
+
+void createProgram() {
+  ZoneScoped;  // NOLINT
+
+  constexpr std::string_view VertexShader = R"(
+  #version 460 core
+
+  layout(location=0) in vec3 aPosition;
+  layout(location=1) in vec2 aUV0;
+  layout(location=2) in vec2 aUV1;
+
+  layout(std140, binding=0) uniform Matrices
+  {
+      mat4 uMVP;
+  };
+
+  out Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } OUT;
+
+  void main() {
+    OUT.wUV0 = aUV0;
+    OUT.wUV1 = aUV1;
+    gl_Position = uMVP * vec4(aPosition, 1);
+  }
+  )";
+  constexpr std::string_view FragmentShader = R"(
+  #version 460 core
+
+  in Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } IN;
+
+  layout(binding=1) uniform sampler2D uTexture0;
+  layout(binding=2) uniform sampler2D uTexture1;
+
+  layout(location=0) out vec4 out_Color;
+
+  void main() {
+    out_Color = texture(uTexture0, IN.wUV0) * texture(uTexture1, IN.wUV1);
+  }
+  )";
+
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER, VertexShader.data());
+  if(vertexShader == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+
+  const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());
+  if(fragmentShader == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+
+  const auto program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(program == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  glDeleteShader(static_cast<GLuint>(vertexShader));
+  glDeleteShader(static_cast<GLuint>(fragmentShader));
+
+  g_Program = static_cast<GLuint>(program);
+
+  g_uTexture0Locaion = glGetUniformLocation(g_Program, "uTexture0");
+  if(g_uTexture0Locaion == -1) {
+    throw std::runtime_error("\"uTexture0\" uniform doesn't exists.");
+  }
+
+  g_uTexture1Locaion = glGetUniformLocation(g_Program, "uTexture1");
+  if(g_uTexture1Locaion == -1) {
+    throw std::runtime_error("\"uTexture0\" uniform doesn't exists.");
+  }
 }

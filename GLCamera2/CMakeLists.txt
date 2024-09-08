@@ -10,29 +10,29 @@ target_sources(
   GLCamera2
   PRIVATE
   camera.cpp
-  GL_ARB_multitexture.cpp
   input.cpp
   main.cpp
   mathlib.cpp
+  shaders.cpp
 )
 
 target_link_libraries(
   GLCamera2
   PRIVATE
-  glm::glm
   fmt::fmt
+  glbinding::glbinding
+  glm::glm
   OpenGL::GL
-  OpenGL::GLU
   options::options
-  SDL2::SDL2main
   SDL2::SDL2
+  SDL2::SDL2main
   stb::image
 )
 
 target_compile_definitions(
     GLCamera2
     PRIVATE
-    #OPENG_DEBUG
+    #OPENGL_DEBUG
     GLM_ENABLE_EXPERIMENTAL
 )
 

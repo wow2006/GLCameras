@@ -248,6 +248,8 @@ public:
     Matrix4 operator*(float scalar) const;
     Matrix4 operator/(float scalar) const;
 
+    glm::mat4 toGlm() const;
+
     void fromHeadPitchRoll(float headDegrees, float pitchDegrees, float rollDegrees);
     void identity();
     void rotate(const Vector3 &axis, float degrees);
@@ -424,6 +426,16 @@ inline void Matrix4::identity()
     mtx[1][0] = 0.0f, mtx[1][1] = 1.0f, mtx[1][2] = 0.0f, mtx[1][3] = 0.0f;
     mtx[2][0] = 0.0f, mtx[2][1] = 0.0f, mtx[2][2] = 1.0f, mtx[2][3] = 0.0f;
     mtx[3][0] = 0.0f, mtx[3][1] = 0.0f, mtx[3][2] = 0.0f, mtx[3][3] = 1.0f;
+}
+
+inline glm::mat4 Matrix4::toGlm() const
+{
+    return glm::mat4{
+        mtx[0][0], mtx[0][1], mtx[0][2], mtx[0][3],
+        mtx[1][0], mtx[1][1], mtx[1][2], mtx[1][3],
+        mtx[2][0], mtx[2][1], mtx[2][2], mtx[2][3],
+        mtx[3][0], mtx[3][1], mtx[3][2], mtx[3][3],
+    };
 }
 
 //-----------------------------------------------------------------------------
