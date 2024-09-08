@@ -20,52 +20,30 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-#include <windows.h>
-#include "input.h"
+#include <algorithm>
+
+#include <SDL2/SDL_mouse.h>
+#include <SDL2/SDL_keyboard.h>
+
+#include "input.hpp"
 
 //-----------------------------------------------------------------------------
 // Keyboard.
 //-----------------------------------------------------------------------------
 
-Keyboard &Keyboard::instance()
-{
-    static Keyboard theInstance;
-    return theInstance;
+Keyboard &Keyboard::instance() {
+  static Keyboard theInstance;
+  return theInstance;
 }
 
-Keyboard::Keyboard()
-{
-    m_lastChar = 0;
-    m_pCurrKeyStates = m_keyStates[0];
-    m_pPrevKeyStates = m_keyStates[1];
+Keyboard::Keyboard() = default;
+Keyboard::~Keyboard() = default;
 
-    memset(m_pCurrKeyStates, 0, 256);
-    memset(m_pPrevKeyStates, 0, 256);
-}
+void Keyboard::update() {
+  std::swap(m_pCurrKeyStates, m_pPrevKeyStates);
 
-Keyboard::~Keyboard() {}
-
-void Keyboard::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    switch (msg)
-    {
-    case WM_CHAR:
-        m_lastChar = static_cast<int>(wParam);
-        break;
-
-    default:
-        break;
-    }
-}
-
-void Keyboard::update()
-{
-    BYTE *pTempKeyStates = m_pPrevKeyStates;
-
-    m_pPrevKeyStates = m_pCurrKeyStates;
-    m_pCurrKeyStates = pTempKeyStates;
-
-    GetKeyboardState(reinterpret_cast<BYTE*>(m_pCurrKeyStates));
+  auto keyStatus = SDL_GetKeyboardState(nullptr);
+  std::copy_n(keyStatus, 256, m_pCurrKeyStates);
 }
 
 //-----------------------------------------------------------------------------
@@ -73,237 +51,196 @@ void Keyboard::update()
 //-----------------------------------------------------------------------------
 
 #if !defined(WHEEL_DELTA)
-#define WHEEL_DELTA 120
+#  define WHEEL_DELTA 120
 #endif
 
 #if !defined(WM_MOUSEWHEEL)
-#define WM_MOUSEWHEEL 0x020A
+#  define WM_MOUSEWHEEL 0x020A
 #endif
 
 const float Mouse::DEFAULT_WEIGHT_MODIFIER = 0.2f;
 
-Mouse &Mouse::instance()
-{
-    static Mouse theInstance;
-    return theInstance;
+Mouse &Mouse::instance() {
+  static Mouse theInstance;
+  return theInstance;
 }
 
-Mouse::Mouse()
-{
-    m_hWnd = 0;
+Mouse::Mouse() {
+  m_cursorVisible = true;
+  m_enableFiltering = true;
+  m_moveToWindowCenterPending = false;
+
+  m_wheelDelta = 0;
+  m_prevWheelDelta = 0;
+  m_mouseWheel = 0.0F;
+
+  m_weightModifier = DEFAULT_WEIGHT_MODIFIER;
+  m_historyBufferSize = HISTORY_BUFFER_SIZE;
+
+  m_ptWindowCenterPos.x = m_ptWindowCenterPos.y = 0;
+  m_ptCurrentPos.x = m_ptCurrentPos.y = 0;
+}
+
+Mouse::~Mouse() { detach(); }
+
+bool Mouse::attach(SDL_Window *window) {
+  if(nullptr == window) {
+    return false;
+  }
+
+  //if(!m_cursorVisible) {
+  //  hideCursor(true);
+  //}
+
+  m_filtered[0] = 0.0F;
+  m_filtered[1] = 0.0F;
+  m_pCurrButtonStates = m_buttonStates[0];
+  m_pPrevButtonStates = m_buttonStates[1];
+
+  memset(m_history, 0, sizeof(m_history));
+  memset(m_buttonStates, 0, sizeof(m_buttonStates));
+
+  m_window = window;
+
+  int width, height;
+  SDL_GetWindowSize(window, &width, &height);
+  m_ptWindowCenterPos.x = width / 2;
+  m_ptWindowCenterPos.y = height / 2;
+
+  return true;
+}
+
+void Mouse::detach() {
+  if(!m_cursorVisible) {
+    // hideCursor(false);
+
+    // Save the cursor visibility state in case attach() is called later.
+    m_cursorVisible = false;
+  }
+
+  m_window = nullptr;
+}
+
+void Mouse::performMouseFiltering(float x, float y) {
+  // Filter the relative mouse movement based on a weighted sum of the mouse
+  // movement from previous frames to ensure that the mouse movement this
+  // frame is smooth.
+  //
+  // For further details see:
+  //  Nettle, Paul "Smooth Mouse Filtering", flipCode's Ask Midnight column.
+  //  http://www.flipcode.com/cgi-bin/fcarticles.cgi?show=64462
+
+  // Newer mouse entries towards front and older mouse entries towards end.
+  for(int i = m_historyBufferSize - 1; i > 0; --i) {
+    m_history[i * 2] = m_history[(i - 1) * 2];
+    m_history[i * 2 + 1] = m_history[(i - 1) * 2 + 1];
+  }
+
+  // Store current mouse entry at front of array.
+  m_history[0] = x;
+  m_history[1] = y;
+
+  float averageX = 0.0F;
+  float averageY = 0.0F;
+  float averageTotal = 0.0F;
+  float currentWeight = 1.0F;
+
+  // Filter the mouse.
+  for(int i = 0; i < m_historyBufferSize; ++i) {
+    averageX += m_history[i * 2] * currentWeight;
+    averageY += m_history[i * 2 + 1] * currentWeight;
+    averageTotal += 1.0F * currentWeight;
+    currentWeight *= m_weightModifier;
+  }
+
+  m_filtered[0] = averageX / averageTotal;
+  m_filtered[1] = averageY / averageTotal;
+}
+
+void Mouse::handleMsg(int delta) { m_wheelDelta += delta; }
+
+void Mouse::hideCursor(bool hide) {
+  if(hide) {
+    m_cursorVisible = false;
+
+    while(ShowCursor(FALSE) >= 0)
+      ;  // do nothing
+  } else {
     m_cursorVisible = true;
-    m_enableFiltering = true;
+
+    while(ShowCursor(TRUE) < 0)
+      ;  // do nothing
+  }
+}
+
+void Mouse::moveTo(uint32_t x, uint32_t y) {
+  SDL_WarpMouseInWindow(m_window, x, y);
+
+  m_ptCurrentPos.x = x;
+  m_ptCurrentPos.y = y;
+}
+
+void Mouse::moveToWindowCenter() {
+  if(m_ptWindowCenterPos.x != 0 && m_ptWindowCenterPos.y != 0)
+    moveTo(static_cast<int>(m_ptWindowCenterPos.x), static_cast<int>(m_ptWindowCenterPos.y));
+  else
+    m_moveToWindowCenterPending = true;
+}
+
+void Mouse::setWeightModifier(float weightModifier) { m_weightModifier = weightModifier; }
+
+void Mouse::smoothMouse(bool smooth) { m_enableFiltering = smooth; }
+
+void Mouse::update() {
+  // Update mouse buttons.
+  bool *pTempMouseStates = m_pPrevButtonStates;
+
+  m_pPrevButtonStates = m_pCurrButtonStates;
+  m_pCurrButtonStates = pTempMouseStates;
+
+  int mouseX = 0, mouseY = 0;
+  const auto mouseStatus = SDL_GetMouseState(&mouseX, &mouseY);
+  m_pCurrButtonStates[0] = mouseStatus & SDL_BUTTON_LMASK;
+  m_pCurrButtonStates[1] = mouseStatus & SDL_BUTTON_RMASK;
+  m_pCurrButtonStates[2] = mouseStatus & SDL_BUTTON_MMASK;
+
+  // Update mouse scroll wheel.
+
+  m_mouseWheel = static_cast<float>(m_wheelDelta - m_prevWheelDelta) / static_cast<float>(WHEEL_DELTA);
+  m_prevWheelDelta = m_wheelDelta;
+
+  // Calculate the center position of the window the mouse is attached to.
+  // Do this once every update in case the window has changed position or
+  // size.
+
+  int width;
+  int height;
+  SDL_GetWindowSize(m_window, &width, &height);
+  m_ptWindowCenterPos = {width / 2, height / 2};
+
+  if(m_moveToWindowCenterPending) {
     m_moveToWindowCenterPending = false;
+    moveToWindowCenter();
+  }
 
-    m_wheelDelta = 0;
-    m_prevWheelDelta = 0;
-    m_mouseWheel = 0.0f;
+  m_ptCurrentPos = {mouseX, mouseY};
+  m_ptDistFromWindowCenter = {static_cast<float>(m_ptCurrentPos.x - m_ptWindowCenterPos.x),
+                              static_cast<float>(m_ptWindowCenterPos.y - m_ptCurrentPos.y)};
+  // Fix SDL_GetMouseState fluctuation.
+  m_ptDistFromWindowCenter.x = glm::abs(static_cast<int>(m_ptDistFromWindowCenter.x)) == 1 ? 0 : m_ptDistFromWindowCenter.x;
+  m_ptDistFromWindowCenter.y = glm::abs(static_cast<int>(m_ptDistFromWindowCenter.y)) == 1 ? 0 : m_ptDistFromWindowCenter.y;
 
-    m_xDistFromWindowCenter = 0.0f;
-    m_yDistFromWindowCenter = 0.0f;
-       
-    m_weightModifier = DEFAULT_WEIGHT_MODIFIER;
-    m_historyBufferSize = HISTORY_BUFFER_SIZE;
+  fmt::print("({}, {}) ({}, {}) ({}, {})\n",
+             m_ptCurrentPos.x,
+             m_ptCurrentPos.y,
+             m_ptWindowCenterPos.x,
+             m_ptWindowCenterPos.y,
+             m_ptDistFromWindowCenter.x,
+             m_ptDistFromWindowCenter.y);
 
-    m_ptWindowCenterPos.x = m_ptWindowCenterPos.y = 0;
-    m_ptCurrentPos.x = m_ptCurrentPos.y = 0;
-}
+  if(m_enableFiltering) {
+    performMouseFiltering(m_ptDistFromWindowCenter.x, m_ptDistFromWindowCenter.y);
 
-Mouse::~Mouse()
-{
-    detach();
-}
-
-bool Mouse::attach(HWND hWnd)
-{
-    if (!hWnd)
-        return false;
-
-    m_hWnd = hWnd;
-
-    if (!m_cursorVisible)
-        hideCursor(true);
-    
-    m_filtered[0] = 0.0f;
-    m_filtered[1] = 0.0f;
-    m_pCurrButtonStates = m_buttonStates[0];
-    m_pPrevButtonStates = m_buttonStates[1];
-
-    memset(m_history, 0, sizeof(m_history));
-    memset(m_buttonStates, 0, sizeof(m_buttonStates));
-
-    RECT rcClient;
-
-    GetClientRect(m_hWnd, &rcClient);
-    m_ptWindowCenterPos.x = (rcClient.right - rcClient.left) / 2;
-    m_ptWindowCenterPos.y = (rcClient.bottom - rcClient.top) / 2;
-
-    return true;
-}
-
-void Mouse::detach()
-{
-    if (!m_cursorVisible)
-    {
-        hideCursor(false);
-        
-        // Save the cursor visibility state in case attach() is called later.
-        m_cursorVisible = false;
-    }
-
-    m_hWnd = 0;
-}
-
-void Mouse::performMouseFiltering(float x, float y)
-{
-    // Filter the relative mouse movement based on a weighted sum of the mouse
-    // movement from previous frames to ensure that the mouse movement this
-    // frame is smooth.
-    //
-    // For further details see:
-    //  Nettle, Paul "Smooth Mouse Filtering", flipCode's Ask Midnight column.
-    //  http://www.flipcode.com/cgi-bin/fcarticles.cgi?show=64462
-
-    // Newer mouse entries towards front and older mouse entries towards end.
-    for (int i = m_historyBufferSize - 1; i > 0; --i)
-    {
-        m_history[i * 2] = m_history[(i - 1) * 2];
-        m_history[i * 2 + 1] = m_history[(i - 1) * 2 + 1];
-    }
-
-    // Store current mouse entry at front of array.
-    m_history[0] = x;
-    m_history[1] = y;
-
-    float averageX = 0.0f;
-    float averageY = 0.0f;
-    float averageTotal = 0.0f;
-    float currentWeight = 1.0f;
-
-    // Filter the mouse.
-    for (int i = 0; i < m_historyBufferSize; ++i)
-    {
-        averageX += m_history[i * 2] * currentWeight;
-        averageY += m_history[i * 2 + 1] * currentWeight;
-        averageTotal += 1.0f * currentWeight;
-        currentWeight *= m_weightModifier;
-    }
-
-    m_filtered[0] = averageX / averageTotal;
-    m_filtered[1] = averageY / averageTotal;
-}
-
-void Mouse::handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    switch (msg)
-    {
-    default:
-        break;
-
-    case WM_MOUSEWHEEL:
-        m_wheelDelta += static_cast<int>(static_cast<int>(wParam) >> 16);
-        break;
-    }
-}
-
-void Mouse::hideCursor(bool hide)
-{
-    if (hide)
-    {
-        m_cursorVisible = false;
-
-        while (ShowCursor(FALSE) >= 0)
-            ; // do nothing
-    }
-    else
-    {
-        m_cursorVisible = true;
-
-        while (ShowCursor(TRUE) < 0)
-            ; // do nothing
-    }
-}
-
-void Mouse::moveTo(UINT x, UINT y)
-{
-    POINT ptScreen = {x, y};
-
-    ClientToScreen(m_hWnd, &ptScreen);
-    SetCursorPos(ptScreen.x, ptScreen.y);
-
-    m_ptCurrentPos.x = x;
-    m_ptCurrentPos.y = y;
-}
-
-void Mouse::moveToWindowCenter()
-{
-    if (m_ptWindowCenterPos.x != 0 && m_ptWindowCenterPos.y != 0)
-        moveTo(m_ptWindowCenterPos.x, m_ptWindowCenterPos.y);
-    else
-        m_moveToWindowCenterPending = true;
-}
-
-void Mouse::setWeightModifier(float weightModifier)
-{
-    m_weightModifier = weightModifier;
-}
-
-void Mouse::smoothMouse(bool smooth)
-{
-    m_enableFiltering = smooth;
-}
-
-void Mouse::update()
-{
-    // Update mouse buttons.
-
-    bool *pTempMouseStates = m_pPrevButtonStates;
-
-    m_pPrevButtonStates = m_pCurrButtonStates;
-    m_pCurrButtonStates = pTempMouseStates;
-
-    m_pCurrButtonStates[0] = (GetKeyState(VK_LBUTTON) & 0x8000) ? true : false;
-    m_pCurrButtonStates[1] = (GetKeyState(VK_RBUTTON) & 0x8000) ? true : false;
-    m_pCurrButtonStates[2] = (GetKeyState(VK_MBUTTON) & 0x8000) ? true : false;
-
-    // Update mouse scroll wheel.
-
-    m_mouseWheel = static_cast<float>(m_wheelDelta - m_prevWheelDelta) / static_cast<float>(WHEEL_DELTA);
-    m_prevWheelDelta = m_wheelDelta;
-
-    // Calculate the center position of the window the mouse is attached to.
-    // Do this once every update in case the window has changed position or
-    // size.
-
-    RECT rcClient;
-    int width;
-    int height;
-
-    GetClientRect(m_hWnd, &rcClient);
-    width = (rcClient.right - rcClient.left);
-    height = (rcClient.bottom - rcClient.top);
-    m_ptWindowCenterPos.x = width / 2;
-    m_ptWindowCenterPos.y = height / 2;   
-
-    if (m_moveToWindowCenterPending)
-    {
-        m_moveToWindowCenterPending = false;
-        moveToWindowCenter();
-    }
-
-    // Update mouse position.
-
-    GetCursorPos(&m_ptCurrentPos);
-    ScreenToClient(m_hWnd, &m_ptCurrentPos);
-
-    m_xDistFromWindowCenter = static_cast<float>(m_ptCurrentPos.x - m_ptWindowCenterPos.x);
-    m_yDistFromWindowCenter = static_cast<float>(m_ptWindowCenterPos.y - m_ptCurrentPos.y);
-
-    if (m_enableFiltering)
-    {
-        performMouseFiltering(m_xDistFromWindowCenter, m_yDistFromWindowCenter);
-
-        m_xDistFromWindowCenter = m_filtered[0];
-        m_yDistFromWindowCenter = m_filtered[1];
-    }
+    m_ptDistFromWindowCenter = {m_filtered[0], m_filtered[1]};
+  }
 }

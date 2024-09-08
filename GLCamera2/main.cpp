@@ -27,72 +27,50 @@
 // quaternion based rather than vector based.
 //
 //-----------------------------------------------------------------------------
-
-#if !defined(WIN32_LEAN_AND_MEAN)
-#  define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <windows.h>
+// stb
+#include <stb_image.h>
+// GL
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include <cmath>
-#include <fstream>
-#include <iomanip>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-
-#if defined(_DEBUG)
-#  include <crtdbg.h>
-#endif
+// SDL2
+#include <SDL2/SDL.h>
 
 #include "GL_ARB_multitexture.h"
-#include "WGL_ARB_multisample.h"
-#include "bitmap.h"
-#include "camera.h"
-#include "gl_font.h"
-#include "input.h"
+#include "camera.hpp"
+#include "input.hpp"
 
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
 
-#define APP_TITLE "OpenGL Quaternion Camera Demo"
-
-// Windows Vista compositing support.
-#if !defined(PFD_SUPPORT_COMPOSITION)
-#  define PFD_SUPPORT_COMPOSITION 0x00008000
-#endif
+namespace {
+constexpr auto APP_TITLE = "OpenGL Quaternion Camera Demo";
 
 // GL_EXT_texture_filter_anisotropic
-#define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+constexpr auto GL_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE;
+constexpr auto GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF;
 
-const Vector3 CAMERA_ACCELERATION(8.0f, 8.0f, 8.0f);
-const float CAMERA_FOVX = 90.0f;
-const Vector3 CAMERA_POS(0.0f, 1.0f, 0.0f);
-const float CAMERA_SPEED_ROTATION = 0.2f;
-const float CAMERA_SPEED_FLIGHT_YAW = 100.0f;
-const Vector3 CAMERA_VELOCITY(2.0f, 2.0f, 2.0f);
-const float CAMERA_ZFAR = 100.0f;
-const float CAMERA_ZNEAR = 0.1f;
+const Vector3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
+constexpr float CAMERA_FOVX = 90.0F;
+const Vector3 CAMERA_POS(0.0F, 1.0F, 0.0F);
+constexpr float CAMERA_SPEED_ROTATION = 0.2F;
+constexpr float CAMERA_SPEED_FLIGHT_YAW = 100.0F;
+const Vector3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
+constexpr float CAMERA_ZFAR = 100.0F;
+constexpr float CAMERA_ZNEAR = 0.1F;
 
-const float FLOOR_WIDTH = 16.0f;
-const float FLOOR_HEIGHT = 16.0f;
-const float FLOOR_TILE_S = 8.0f;
-const float FLOOR_TILE_T = 8.0f;
+constexpr float FLOOR_WIDTH = 16.0F;
+constexpr float FLOOR_HEIGHT = 16.0F;
+constexpr float FLOOR_TILE_S = 8.0F;
+constexpr float FLOOR_TILE_T = 8.0F;
+}  // namespace
 
 //-----------------------------------------------------------------------------
 // Globals.
 //-----------------------------------------------------------------------------
 
-HWND g_hWnd;
-HDC g_hDC;
-HGLRC g_hRC;
-HINSTANCE g_hInstance;
 int g_framesPerSecond;
-int g_windowWidth;
-int g_windowHeight;
+glm::ivec2 g_windowResolution;
 int g_msaaSamples;
 int g_maxAnisotrophy;
 bool g_isFullScreen;
@@ -103,11 +81,12 @@ bool g_flightModeEnabled;
 GLuint g_floorColorMapTexture;
 GLuint g_floorLightMapTexture;
 GLuint g_floorDisplayList;
-GLFont g_font;
 Camera g_camera;
 Vector3 g_cameraBoundsMax;
 Vector3 g_cameraBoundsMin;
 float g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
+SDL_Window *g_pWindow = nullptr;
+SDL_GLContext g_glcontext = nullptr;
 
 //-----------------------------------------------------------------------------
 // Functions Prototypes.
@@ -116,14 +95,11 @@ float g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 void Cleanup();
 void CleanupApp();
 HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
-void EnableVerticalSync(bool enableVerticalSync);
-bool ExtensionSupported(const char *pszExtensionName);
 float GetElapsedTimeInSeconds();
 void GetMovementDirection(Vector3 &direction);
 bool Init();
 void InitApp();
 void InitGL();
-void LimitFrameRate(float frameRateLimit, float frameTimeSeconds);
 GLuint LoadTexture(const char *pszFilename);
 GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter, GLint wrapS, GLint wrapT);
 void Log(const char *pszMessage);
@@ -132,136 +108,98 @@ void ProcessUserInput();
 void RenderFloor();
 void RenderFrame();
 void RenderText();
-void SetProcessorAffinity();
-void ToggleFullScreen();
 void UpdateCamera(float elapsedTimeSec);
 void UpdateFrame(float elapsedTimeSec);
 void UpdateFrameRate(float elapsedTimeSec);
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void ToggleFullScreen();
 
 //-----------------------------------------------------------------------------
 // Functions.
 //-----------------------------------------------------------------------------
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
-#if defined _DEBUG
+int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
+#if defined(_WIN32) && defined(_DEBUG)
   _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
   _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
   _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 #endif
+  if(0 != SDL_Init(SDL_INIT_VIDEO)) {
+    fmt::print(stderr, fg(fmt::color::red), "ERROR: Can not initailize SDL: {}\n", SDL_GetError());
+    return EXIT_FAILURE;
+  }
 
-  MSG msg = {0};
-  WNDCLASSEX wcl = {0};
+  // Get the screen resolution
+  SDL_DisplayMode mode{};
+  if(0 == SDL_GetDisplayMode(0, 0, &mode)) {
+    g_windowResolution = {mode.w / 2, mode.h / 2};
+  } else {
+    // fallback window resolution will be 800x600
+    g_windowResolution = {800, 600};
+  }
 
-  wcl.cbSize = sizeof(wcl);
-  wcl.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-  wcl.lpfnWndProc = WindowProc;
-  wcl.cbClsExtra = 0;
-  wcl.cbWndExtra = 0;
-  wcl.hInstance = g_hInstance = hInstance;
-  wcl.hIcon = LoadIcon(0, IDI_APPLICATION);
-  wcl.hCursor = LoadCursor(0, IDC_ARROW);
-  wcl.hbrBackground = 0;
-  wcl.lpszMenuName = 0;
-  wcl.lpszClassName = "GLWindowClass";
-  wcl.hIconSm = 0;
+  constexpr auto flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_MOUSE_GRABBED | SDL_WINDOW_MOUSE_CAPTURE;
+  g_pWindow = SDL_CreateWindow(APP_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, g_windowResolution.x, g_windowResolution.y, flags);
+  if(nullptr == g_pWindow) {
+    fmt::print(stderr, fg(fmt::color::red), "ERROR: Can not create SDL Window\n");
+    return EXIT_FAILURE;
+  }
 
-  if(!RegisterClassEx(&wcl))
-    return 0;
+  SDL_SetThreadPriority(SDL_THREAD_PRIORITY_TIME_CRITICAL);
 
-  g_hWnd = CreateAppWindow(wcl, APP_TITLE);
-
-  if(g_hWnd) {
-    SetProcessorAffinity();
-
-    if(Init()) {
-      ShowWindow(g_hWnd, nShowCmd);
-      UpdateWindow(g_hWnd);
-
-      while(true) {
-        while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
-          if(msg.message == WM_QUIT)
-            break;
-
-          TranslateMessage(&msg);
-          DispatchMessage(&msg);
+  if(Init()) {
+    Mouse::instance().moveToWindowCenter();
+    bool bRunning = true;
+    while(bRunning) {
+      SDL_Event event;
+      while(SDL_PollEvent(&event)) {
+        if(SDL_QUIT == event.type) {
+          bRunning = false;
         }
-
-        if(msg.message == WM_QUIT)
-          break;
-
-        if(g_hasFocus) {
-          UpdateFrame(GetElapsedTimeInSeconds());
-          RenderFrame();
-          SwapBuffers(g_hDC);
-        } else {
-          WaitMessage();
+        if(SDL_KEYDOWN == event.type) {
+          if(SDL_SCANCODE_ESCAPE == event.key.keysym.scancode) {
+            bRunning = false;
+          } else if(SDL_SCANCODE_H == event.key.keysym.scancode) {
+          } else if(SDL_SCANCODE_M == event.key.keysym.scancode) {
+          }
+        }
+        if(SDL_WINDOWEVENT == event.type) {
+          const auto windowEvent = event.window;
+          switch(windowEvent.event) {
+          case SDL_WINDOWEVENT_RESIZED:
+            g_windowResolution = {static_cast<int>(windowEvent.data1), static_cast<int>(windowEvent.data2)};
+            break;
+          case SDL_WINDOWEVENT_CLOSE: bRunning = false; break;
+          case SDL_WINDOWEVENT_ENTER:
+          case SDL_WINDOWEVENT_FOCUS_GAINED:
+            Mouse::instance().attach(g_pWindow);
+            g_hasFocus = true;
+            break;
+          case SDL_WINDOWEVENT_LEAVE:
+          case SDL_WINDOWEVENT_FOCUS_LOST:
+            Mouse::instance().detach();
+            g_hasFocus = false;
+            break;
+          }
         }
       }
+
+      //if(g_hasFocus) {
+      UpdateFrame(GetElapsedTimeInSeconds());
+      RenderFrame();
+      SDL_GL_SwapWindow(g_pWindow);
+      //} else {
+      //  SDL_WaitEvent(&event);
+      //}
     }
-
-    Cleanup();
-    UnregisterClass(wcl.lpszClassName, hInstance);
   }
-
-  return static_cast<int>(msg.wParam);
+  Cleanup();
+  SDL_Quit();
+  return EXIT_SUCCESS;
 }
 
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  switch(msg) {
-  case WM_ACTIVATE:
-    switch(wParam) {
-    default: break;
-
-    case WA_ACTIVE:
-    case WA_CLICKACTIVE:
-      Mouse::instance().attach(hWnd);
-      g_hasFocus = true;
-      break;
-
-    case WA_INACTIVE:
-      if(g_isFullScreen)
-        ShowWindow(hWnd, SW_MINIMIZE);
-      Mouse::instance().detach();
-      g_hasFocus = false;
-      break;
-    }
-    break;
-
-  case WM_DESTROY: PostQuitMessage(0); return 0;
-
-  case WM_SIZE:
-    g_windowWidth = static_cast<int>(LOWORD(lParam));
-    g_windowHeight = static_cast<int>(HIWORD(lParam));
-    break;
-
-  default:
-    Mouse::instance().handleMsg(hWnd, msg, wParam, lParam);
-    Keyboard::instance().handleMsg(hWnd, msg, wParam, lParam);
-    break;
-  }
-
-  return DefWindowProc(hWnd, msg, wParam, lParam);
-}
-
-void Cleanup() {
-  CleanupApp();
-
-  if(g_hDC) {
-    if(g_hRC) {
-      wglMakeCurrent(g_hDC, 0);
-      wglDeleteContext(g_hRC);
-      g_hRC = 0;
-    }
-
-    ReleaseDC(g_hWnd, g_hDC);
-    g_hDC = 0;
-  }
-}
+void Cleanup() { CleanupApp(); }
 
 void CleanupApp() {
-  g_font.destroy();
-
   if(g_floorColorMapTexture) {
     glDeleteTextures(1, &g_floorColorMapTexture);
     g_floorColorMapTexture = 0;
@@ -276,77 +214,8 @@ void CleanupApp() {
     glDeleteLists(g_floorDisplayList, 1);
     g_floorDisplayList = 0;
   }
-}
-
-HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle) {
-  // Create a window that is centered on the desktop. It's exactly 1/4 the
-  // size of the desktop. Don't allow it to be resized.
-
-  DWORD wndExStyle = WS_EX_OVERLAPPEDWINDOW;
-  DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-
-  HWND hWnd = CreateWindowEx(wndExStyle, wcl.lpszClassName, pszTitle, wndStyle, 0, 0, 0, 0, 0, 0, wcl.hInstance, 0);
-
-  if(hWnd) {
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    int halfScreenWidth = screenWidth / 2;
-    int halfScreenHeight = screenHeight / 2;
-    int left = (screenWidth - halfScreenWidth) / 2;
-    int top = (screenHeight - halfScreenHeight) / 2;
-    RECT rc = {0};
-
-    SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
-    AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
-    MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
-
-    GetClientRect(hWnd, &rc);
-    g_windowWidth = rc.right - rc.left;
-    g_windowHeight = rc.bottom - rc.top;
-  }
-
-  return hWnd;
-}
-
-void EnableVerticalSync(bool enableVerticalSync) {
-  // WGL_EXT_swap_control.
-
-  typedef BOOL(WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
-
-  static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
-    reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(wglGetProcAddress("wglSwapIntervalEXT"));
-
-  if(wglSwapIntervalEXT) {
-    wglSwapIntervalEXT(enableVerticalSync ? 1 : 0);
-    g_enableVerticalSync = enableVerticalSync;
-  }
-}
-
-bool ExtensionSupported(const char *pszExtensionName) {
-  static const char *pszGLExtensions = 0;
-  static const char *pszWGLExtensions = 0;
-
-  if(!pszGLExtensions)
-    pszGLExtensions = reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS));
-
-  if(!pszWGLExtensions) {
-    // WGL_ARB_extensions_string.
-
-    typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
-
-    PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB =
-      reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(wglGetProcAddress("wglGetExtensionsStringARB"));
-
-    if(wglGetExtensionsStringARB)
-      pszWGLExtensions = wglGetExtensionsStringARB(wglGetCurrentDC());
-  }
-
-  if(!strstr(pszGLExtensions, pszExtensionName)) {
-    if(!strstr(pszWGLExtensions, pszExtensionName))
-      return false;
-  }
-
-  return true;
+  SDL_DestroyWindow(g_pWindow);
+  g_pWindow = nullptr;
 }
 
 float GetElapsedTimeInSeconds() {
@@ -357,28 +226,28 @@ float GetElapsedTimeInSeconds() {
   static const int MAX_SAMPLE_COUNT = 50;
 
   static float frameTimes[MAX_SAMPLE_COUNT];
-  static float timeScale = 0.0f;
-  static float actualElapsedTimeSec = 0.0f;
+  static float timeScale = 0.0F;
+  static float actualElapsedTimeSec = 0.0F;
   static INT64 freq = 0;
   static INT64 lastTime = 0;
   static int sampleCount = 0;
   static bool initialized = false;
 
   INT64 time = 0;
-  float elapsedTimeSec = 0.0f;
+  float elapsedTimeSec = 0.0F;
 
   if(!initialized) {
     initialized = true;
     QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER *>(&freq));
     QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&lastTime));
-    timeScale = 1.0f / freq;
+    timeScale = 1.0F / freq;
   }
 
   QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&time));
   elapsedTimeSec = (time - lastTime) * timeScale;
   lastTime = time;
 
-  if(fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0f) {
+  if(fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0F) {
     memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
     frameTimes[0] = elapsedTimeSec;
 
@@ -386,7 +255,7 @@ float GetElapsedTimeInSeconds() {
       ++sampleCount;
   }
 
-  actualElapsedTimeSec = 0.0f;
+  actualElapsedTimeSec = 0.0F;
 
   for(int i = 0; i < sampleCount; ++i)
     actualElapsedTimeSec += frameTimes[i];
@@ -408,70 +277,70 @@ void GetMovementDirection(Vector3 &direction) {
   Vector3 velocity = g_camera.getCurrentVelocity();
   Keyboard &keyboard = Keyboard::instance();
 
-  direction.set(0.0f, 0.0f, 0.0f);
+  direction.set(0.0F, 0.0F, 0.0F);
 
-  if(keyboard.keyDown(Keyboard::KEY_W)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_W)) {
     if(!moveForwardsPressed) {
       moveForwardsPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
     }
 
-    direction.z += 1.0f;
+    direction.z += 1.0F;
   } else {
     moveForwardsPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_S)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_S)) {
     if(!moveBackwardsPressed) {
       moveBackwardsPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
     }
 
-    direction.z -= 1.0f;
+    direction.z -= 1.0F;
   } else {
     moveBackwardsPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_D)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_D)) {
     if(!moveRightPressed) {
       moveRightPressed = true;
-      g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
+      g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
     }
 
-    direction.x += 1.0f;
+    direction.x += 1.0F;
   } else {
     moveRightPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_A)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_A)) {
     if(!moveLeftPressed) {
       moveLeftPressed = true;
-      g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
+      g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
     }
 
-    direction.x -= 1.0f;
+    direction.x -= 1.0F;
   } else {
     moveLeftPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_E)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_E)) {
     if(!moveUpPressed) {
       moveUpPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
+      g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
     }
 
-    direction.y += 1.0f;
+    direction.y += 1.0F;
   } else {
     moveUpPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_Q)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_Q)) {
     if(!moveDownPressed) {
       moveDownPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
+      g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
     }
 
-    direction.y -= 1.0f;
+    direction.y -= 1.0F;
   } else {
     moveDownPressed = false;
   }
@@ -481,8 +350,9 @@ bool Init() {
   try {
     InitGL();
 
-    if(!ExtensionSupported("GL_ARB_multitexture"))
+    if(!SDL_GL_ExtensionSupported("GL_ARB_multitexture")) {
       throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
+    }
 
     InitApp();
     return true;
@@ -498,106 +368,88 @@ bool Init() {
 }
 
 void InitApp() {
-  // Setup fonts.
-
-  if(!g_font.create("Arial", 10, GLFont::BOLD))
-    throw std::runtime_error("Failed to create font.");
+  // TODO: Setup fonts.
 
   // Load textures.
-
-  if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg")))
+  if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg"))) {
     throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
+  }
 
-  if(!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg")))
+  if(!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg"))) {
     throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
+  }
 
   // Setup camera.
-
-  g_camera.perspective(CAMERA_FOVX, static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight), CAMERA_ZNEAR, CAMERA_ZFAR);
+  g_camera.perspective(CAMERA_FOVX, static_cast<float>(g_windowResolution.x) / static_cast<float>(g_windowResolution.y), CAMERA_ZNEAR, CAMERA_ZFAR);
 
   g_camera.setBehavior(Camera::CAMERA_BEHAVIOR_FIRST_PERSON);
   g_camera.setPosition(CAMERA_POS);
   g_camera.setAcceleration(CAMERA_ACCELERATION);
   g_camera.setVelocity(CAMERA_VELOCITY);
 
-  g_cameraBoundsMax.set(FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f);
-  g_cameraBoundsMin.set(-FLOOR_WIDTH / 2.0f, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0f);
+  g_cameraBoundsMax.set(FLOOR_WIDTH / 2.0F, 4.0F, FLOOR_HEIGHT / 2.0F);
+  g_cameraBoundsMin.set(-FLOOR_WIDTH / 2.0F, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0F);
 
-  Mouse::instance().hideCursor(true);
+  // Mouse::instance().hideCursor(true);
   Mouse::instance().moveToWindowCenter();
 
   // Setup display list for the floor.
-
   g_floorDisplayList = glGenLists(1);
   glNewList(g_floorDisplayList, GL_COMPILE);
-  glBegin(GL_QUADS);
-  glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);
-  glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
-  glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+  {
+    glBegin(GL_QUADS);
+    {
+      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0F, 0.0F);
+      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0F, 0.0F);
+      glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0F, FLOOR_HEIGHT * 0.5f);
 
-  glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0f);
-  glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 0.0f);
-  glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0F);
+      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0F, 0.0F);
+      glVertex3f(FLOOR_WIDTH * 0.5f, 0.0F, FLOOR_HEIGHT * 0.5f);
 
-  glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
-  glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 1.0f);
-  glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
+      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
+      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0F, 1.0F);
+      glVertex3f(FLOOR_WIDTH * 0.5f, 0.0F, -FLOOR_HEIGHT * 0.5f);
 
-  glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
-  glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 1.0f);
-  glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-  glEnd();
+      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
+      glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0F, 1.0F);
+      glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0F, -FLOOR_HEIGHT * 0.5f);
+    }
+    glEnd();
+  }
   glEndList();
 }
 
 void InitGL() {
-  if(!(g_hDC = GetDC(g_hWnd)))
-    throw std::runtime_error("GetDC() failed.");
+  if(SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8) < 0) {
+    Log("Failed to set the Red size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8) < 0) {
+    Log("Failed to set the green size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8) < 0) {
+    Log("Failed to set the blue size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, 32) < 0) {
+    Log("Failed to set the buffer size to 32");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16) < 0) {
+    Log("Failed to set the Depth size to 16");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1) < 0) {
+    Log("Failed to set the DoubleBuffer");
+  }
 
-  int pf = 0;
-  PIXELFORMATDESCRIPTOR pfd = {0};
-  OSVERSIONINFO osvi = {0};
+  g_glcontext = SDL_GL_CreateContext(g_pWindow);
 
-  pfd.nSize = sizeof(pfd);
-  pfd.nVersion = 1;
-  pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-  pfd.iPixelType = PFD_TYPE_RGBA;
-  pfd.cColorBits = 24;
-  pfd.cDepthBits = 16;
-  pfd.iLayerType = PFD_MAIN_PLANE;
-
-  osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-  if(!GetVersionEx(&osvi))
-    throw std::runtime_error("GetVersionEx() failed.");
-
-  // When running under Windows Vista or later support desktop composition.
-
-  if(osvi.dwMajorVersion > 6 || (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion >= 0))
-    pfd.dwFlags |= PFD_SUPPORT_COMPOSITION;
-
-  ChooseBestMultiSampleAntiAliasingPixelFormat(pf, g_msaaSamples);
-
-  if(!pf)
-    pf = ChoosePixelFormat(g_hDC, &pfd);
-
-  if(!SetPixelFormat(g_hDC, pf, &pfd))
-    throw std::runtime_error("SetPixelFormat() failed.");
-
-  if(!(g_hRC = wglCreateContext(g_hDC)))
-    throw std::runtime_error("wglCreateContext() failed.");
-
-  if(!wglMakeCurrent(g_hDC, g_hRC))
-    throw std::runtime_error("wglMakeCurrent() failed.");
-
-  EnableVerticalSync(false);
+  SDL_GL_SetSwapInterval(1);
 
   // Check for GL_EXT_texture_filter_anisotropic support.
-
-  if(ExtensionSupported("GL_EXT_texture_filter_anisotropic"))
+  if(SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic")) {
     glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
-  else
+  } else {
     g_maxAnisotrophy = 1;
+  }
 }
 
 GLuint LoadTexture(const char *pszFilename) {
@@ -605,28 +457,33 @@ GLuint LoadTexture(const char *pszFilename) {
 }
 
 GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter, GLint wrapS, GLint wrapT) {
+  ZoneScoped;  // NOLINT
+
   GLuint id = 0;
-  Bitmap bitmap;
+  int width, height, channels;
+  stbi_set_flip_vertically_on_load(1);
+  void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
-  if(bitmap.loadPicture(pszFilename)) {
-    // The Bitmap class loads images and orients them top-down.
-    // OpenGL expects bitmap images to be oriented bottom-up.
-    bitmap.flipVertical();
-
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
-
-    if(g_maxAnisotrophy > 1) {
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, g_maxAnisotrophy);
-    }
-
-    gluBuild2DMipmaps(GL_TEXTURE_2D, 4, bitmap.width, bitmap.height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, bitmap.getPixels());
+  if(nullptr == pImage) {
+    MessageBox(0, "Failed to load the texture", "Error", MB_ICONSTOP);
+    return id;
   }
+
+  glGenTextures(1, &id);
+  glBindTexture(GL_TEXTURE_2D, id);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
+
+  if(g_maxAnisotrophy > 1) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, g_maxAnisotrophy);
+  }
+
+  gluBuild2DMipmaps(GL_TEXTURE_2D, 4, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+
+  stbi_image_free(pImage);
 
   return id;
 }
@@ -637,23 +494,29 @@ void PerformCameraCollisionDetection() {
   const Vector3 &pos = g_camera.getPosition();
   Vector3 newPos(pos);
 
-  if(pos.x > g_cameraBoundsMax.x)
+  if(pos.x > g_cameraBoundsMax.x) {
     newPos.x = g_cameraBoundsMax.x;
+  }
 
-  if(pos.x < g_cameraBoundsMin.x)
+  if(pos.x < g_cameraBoundsMin.x) {
     newPos.x = g_cameraBoundsMin.x;
+  }
 
-  if(pos.y > g_cameraBoundsMax.y)
+  if(pos.y > g_cameraBoundsMax.y) {
     newPos.y = g_cameraBoundsMax.y;
+  }
 
-  if(pos.y < g_cameraBoundsMin.y)
+  if(pos.y < g_cameraBoundsMin.y) {
     newPos.y = g_cameraBoundsMin.y;
+  }
 
-  if(pos.z > g_cameraBoundsMax.z)
+  if(pos.z > g_cameraBoundsMax.z) {
     newPos.z = g_cameraBoundsMax.z;
+  }
 
-  if(pos.z < g_cameraBoundsMin.z)
+  if(pos.z < g_cameraBoundsMin.z) {
     newPos.z = g_cameraBoundsMin.z;
+  }
 
   g_camera.setPosition(newPos);
 }
@@ -662,52 +525,53 @@ void ProcessUserInput() {
   Keyboard &keyboard = Keyboard::instance();
   Mouse &mouse = Mouse::instance();
 
-  if(keyboard.keyPressed(Keyboard::KEY_ESCAPE))
-    PostMessage(g_hWnd, WM_CLOSE, 0, 0);
-
-  if(keyboard.keyDown(Keyboard::KEY_LALT) || keyboard.keyDown(Keyboard::KEY_RALT)) {
-    if(keyboard.keyPressed(Keyboard::KEY_ENTER))
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_LALT) || keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_RALT)) {
+    if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_RETURN)) {
       ToggleFullScreen();
+    }
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_H))
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_H))
     g_displayHelp = !g_displayHelp;
 
-  if(keyboard.keyPressed(Keyboard::KEY_M))
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_M))
     mouse.smoothMouse(!mouse.isMouseSmoothing());
 
-  if(keyboard.keyPressed(Keyboard::KEY_V))
-    EnableVerticalSync(!g_enableVerticalSync);
-
-  if(keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD)) {
-    g_cameraRotationSpeed += 0.01f;
-
-    if(g_cameraRotationSpeed > 1.0f)
-      g_cameraRotationSpeed = 1.0f;
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_V)) {
+    // EnableVerticalSync(!g_enableVerticalSync);
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_SUBTRACT) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT)) {
-    g_cameraRotationSpeed -= 0.01f;
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_EQUALS) || keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_KP_PLUS)) {
+    g_cameraRotationSpeed += 0.01F;
 
-    if(g_cameraRotationSpeed <= 0.0f)
-      g_cameraRotationSpeed = 0.01f;
+    if(g_cameraRotationSpeed > 1.0F) {
+      g_cameraRotationSpeed = 1.0F;
+    }
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_PERIOD)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_MINUS) || keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_KP_MINUS)) {
+    g_cameraRotationSpeed -= 0.01F;
+
+    if(g_cameraRotationSpeed <= 0.0F) {
+      g_cameraRotationSpeed = 0.01F;
+    }
+  }
+
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_PERIOD)) {
     mouse.setWeightModifier(mouse.weightModifier() + 0.1f);
 
-    if(mouse.weightModifier() > 1.0f)
-      mouse.setWeightModifier(1.0f);
+    if(mouse.weightModifier() > 1.0F)
+      mouse.setWeightModifier(1.0F);
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_COMMA)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_COMMA)) {
     mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
 
-    if(mouse.weightModifier() < 0.0f)
-      mouse.setWeightModifier(0.0f);
+    if(mouse.weightModifier() < 0.0F)
+      mouse.setWeightModifier(0.0F);
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_SPACE)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_SPACE)) {
     g_flightModeEnabled = !g_flightModeEnabled;
 
     if(g_flightModeEnabled) {
@@ -745,8 +609,8 @@ void RenderFrame() {
   glEnable(GL_CULL_FACE);
   glDisable(GL_LIGHTING);
 
-  glViewport(0, 0, g_windowWidth, g_windowHeight);
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glViewport(0, 0, g_windowResolution.x, g_windowResolution.y);
+  glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glMatrixMode(GL_PROJECTION);
@@ -756,7 +620,7 @@ void RenderFrame() {
   glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
 
   RenderFloor();
-  RenderText();
+  // RenderText();
 }
 
 void RenderText() {
@@ -796,10 +660,9 @@ void RenderText() {
            << "Vertical sync: " << (g_enableVerticalSync ? "enabled" : "disabled") << std::endl
            << std::endl
            << "Camera" << std::endl
-           << "  Position:"
-           << " x:" << g_camera.getPosition().x << " y:" << g_camera.getPosition().y << " z:" << g_camera.getPosition().z << std::endl
-           << "  Velocity:"
-           << " x:" << g_camera.getCurrentVelocity().x << " y:" << g_camera.getCurrentVelocity().y
+           << "  Position:" << " x:" << g_camera.getPosition().x << " y:" << g_camera.getPosition().y
+           << " z:" << g_camera.getPosition().z << std::endl
+           << "  Velocity:" << " x:" << g_camera.getCurrentVelocity().x << " y:" << g_camera.getCurrentVelocity().y
            << " z:" << g_camera.getCurrentVelocity().z << std::endl
            << "  Rotation speed: " << g_cameraRotationSpeed << std::endl
            << "  Behavior: " << (g_flightModeEnabled ? "Flight" : "First person") << std::endl
@@ -810,88 +673,12 @@ void RenderText() {
            << std::endl
            << "Press H to display help";
   }
-
-  g_font.begin();
-  g_font.setColor(1.0f, 1.0f, 0.0f);
-  g_font.drawText(1, 1, output.str().c_str());
-  g_font.end();
-}
-
-void SetProcessorAffinity() {
-  // Assign the current thread to one processor. This ensures that timing
-  // code runs on only one processor, and will not suffer any ill effects
-  // from power management.
-  //
-  // Based on DXUTSetProcessorAffinity() function from the DXUT framework.
-
-  DWORD_PTR dwProcessAffinityMask = 0;
-  DWORD_PTR dwSystemAffinityMask = 0;
-  HANDLE hCurrentProcess = GetCurrentProcess();
-
-  if(!GetProcessAffinityMask(hCurrentProcess, &dwProcessAffinityMask, &dwSystemAffinityMask))
-    return;
-
-  if(dwProcessAffinityMask) {
-    // Find the lowest processor that our process is allowed to run against.
-
-    DWORD_PTR dwAffinityMask = (dwProcessAffinityMask & ((~dwProcessAffinityMask) + 1));
-
-    // Set this as the processor that our thread must always run against.
-    // This must be a subset of the process affinity mask.
-
-    HANDLE hCurrentThread = GetCurrentThread();
-
-    if(hCurrentThread != INVALID_HANDLE_VALUE) {
-      SetThreadAffinityMask(hCurrentThread, dwAffinityMask);
-      CloseHandle(hCurrentThread);
-    }
-  }
-
-  CloseHandle(hCurrentProcess);
-}
-
-void ToggleFullScreen() {
-  static DWORD savedExStyle;
-  static DWORD savedStyle;
-  static RECT rcSaved;
-
-  g_isFullScreen = !g_isFullScreen;
-
-  if(g_isFullScreen) {
-    // Moving to full screen mode.
-
-    savedExStyle = GetWindowLong(g_hWnd, GWL_EXSTYLE);
-    savedStyle = GetWindowLong(g_hWnd, GWL_STYLE);
-    GetWindowRect(g_hWnd, &rcSaved);
-
-    SetWindowLong(g_hWnd, GWL_EXSTYLE, 0);
-    SetWindowLong(g_hWnd, GWL_STYLE, WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-    SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-
-    g_windowWidth = GetSystemMetrics(SM_CXSCREEN);
-    g_windowHeight = GetSystemMetrics(SM_CYSCREEN);
-
-    SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-  } else {
-    // Moving back to windowed mode.
-
-    SetWindowLong(g_hWnd, GWL_EXSTYLE, savedExStyle);
-    SetWindowLong(g_hWnd, GWL_STYLE, savedStyle);
-    SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-
-    g_windowWidth = rcSaved.right - rcSaved.left;
-    g_windowHeight = rcSaved.bottom - rcSaved.top;
-
-    SetWindowPos(g_hWnd, HWND_NOTOPMOST, rcSaved.left, rcSaved.top, g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-  }
-
-  g_camera.perspective(CAMERA_FOVX, static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight), CAMERA_ZNEAR, CAMERA_ZFAR);
 }
 
 void UpdateCamera(float elapsedTimeSec) {
-  float heading = 0.0f;
-  float pitch = 0.0f;
-  float roll = 0.0f;
+  float heading = 0.0F;
+  float pitch = 0.0F;
+  float roll = 0.0F;
   Vector3 direction;
   Mouse &mouse = Mouse::instance();
 
@@ -902,7 +689,7 @@ void UpdateCamera(float elapsedTimeSec) {
     pitch = mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
     heading = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
-    g_camera.rotate(heading, pitch, 0.0f);
+    g_camera.rotate(heading, pitch, 0.0F);
     break;
 
   case Camera::CAMERA_BEHAVIOR_FLIGHT:
@@ -911,7 +698,7 @@ void UpdateCamera(float elapsedTimeSec) {
     roll = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
     g_camera.rotate(heading, pitch, roll);
-    direction.x = 0.0f;  // ignore yaw motion when updating camera velocity
+    direction.x = 0.0F;  // ignore yaw motion when updating camera velocity
     break;
   }
 
@@ -932,17 +719,21 @@ void UpdateFrame(float elapsedTimeSec) {
 }
 
 void UpdateFrameRate(float elapsedTimeSec) {
-  static float accumTimeSec = 0.0f;
+  static float accumTimeSec = 0.0F;
   static int frames = 0;
 
   accumTimeSec += elapsedTimeSec;
 
-  if(accumTimeSec > 1.0f) {
+  if(accumTimeSec > 1.0F) {
     g_framesPerSecond = frames;
 
     frames = 0;
-    accumTimeSec = 0.0f;
+    accumTimeSec = 0.0F;
   } else {
     ++frames;
   }
+}
+
+void ToggleFullScreen() {
+  // TODO(Hussein): Implement me
 }

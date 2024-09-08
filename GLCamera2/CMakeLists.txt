@@ -3,19 +3,16 @@ project(GLCamera2 LANGUAGES CXX)
 
 add_executable(
   GLCamera2
-  WIN32
+  # WIN32
 )
 
 target_sources(
   GLCamera2
   PRIVATE
-  main.cpp
-  GL_ARB_multitexture.cpp
-  WGL_ARB_multisample.cpp
-  bitmap.cpp
   camera.cpp
-  gl_font.cpp
+  GL_ARB_multitexture.cpp
   input.cpp
+  main.cpp
   mathlib.cpp
 )
 
@@ -24,20 +21,19 @@ target_link_libraries(
   PRIVATE
   glm::glm
   fmt::fmt
-  glbinding::glbinding
-  Imgui::OpenGL
-  Imgui::Win32
-  stb::image
   OpenGL::GL
   OpenGL::GLU
-  #tracy::tracy
   options::options
+  SDL2::SDL2main
+  SDL2::SDL2
+  stb::image
 )
 
 target_compile_definitions(
-  GLCamera2
-  PRIVATE
-  #OPENG_DEBUG
+    GLCamera2
+    PRIVATE
+    #OPENG_DEBUG
+    GLM_ENABLE_EXPERIMENTAL
 )
 
 set_target_properties(

@@ -20,10 +20,8 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-#if !defined(GL_ARB_MULTITEXTURE_H)
-#define GL_ARB_MULTITEXTURE_H
+#pragma once
 
-#include <windows.h>
 #include <GL/gl.h>
 
 extern "C"
@@ -68,40 +66,6 @@ extern "C"
 #define GL_MAX_TEXTURE_UNITS_ARB          0x84E2
 
 extern void glActiveTextureARB(GLenum texture);
-extern void glClientActiveTextureARB(GLenum texture);
-extern void glMultiTexCoord1dARB(GLenum target, GLdouble s);
-extern void glMultiTexCoord1dvARB(GLenum target, const GLdouble *v);
-extern void glMultiTexCoord1fARB(GLenum target, GLfloat s);
-extern void glMultiTexCoord1fvARB(GLenum target, const GLfloat *v);
-extern void glMultiTexCoord1iARB(GLenum target, GLint s);
-extern void glMultiTexCoord1ivARB(GLenum target, const GLint *v);
-extern void glMultiTexCoord1sARB(GLenum target, GLshort s);
-extern void glMultiTexCoord1svARB(GLenum target, const GLshort *v);
-extern void glMultiTexCoord2dARB(GLenum target, GLdouble s, GLdouble t);
-extern void glMultiTexCoord2dvARB(GLenum target, const GLdouble *v);
 extern void glMultiTexCoord2fARB(GLenum target, GLfloat s, GLfloat t);
-extern void glMultiTexCoord2fvARB(GLenum target, const GLfloat *v);
-extern void glMultiTexCoord2iARB(GLenum target, GLint s, GLint t);
-extern void glMultiTexCoord2ivARB(GLenum target, const GLint *v);
-extern void glMultiTexCoord2sARB(GLenum target, GLshort s, GLshort t);
-extern void glMultiTexCoord2svARB(GLenum target, const GLshort *v);
-extern void glMultiTexCoord3dARB(GLenum target, GLdouble s, GLdouble t, GLdouble r);
-extern void glMultiTexCoord3dvARB(GLenum target, const GLdouble *v);
-extern void glMultiTexCoord3fARB(GLenum target, GLfloat s, GLfloat t, GLfloat r);
-extern void glMultiTexCoord3fvARB(GLenum target, const GLfloat *v);
-extern void glMultiTexCoord3iARB(GLenum target, GLint s, GLint t, GLint r);
-extern void glMultiTexCoord3ivARB(GLenum target, const GLint *v);
-extern void glMultiTexCoord3sARB(GLenum target, GLshort s, GLshort t, GLshort r);
-extern void glMultiTexCoord3svARB(GLenum target, const GLshort *v);
-extern void glMultiTexCoord4dARB(GLenum target, GLdouble s, GLdouble t, GLdouble r, GLdouble q);
-extern void glMultiTexCoord4dvARB(GLenum target, const GLdouble *v);
-extern void glMultiTexCoord4fARB(GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q);
-extern void glMultiTexCoord4fvARB(GLenum target, const GLfloat *v);
-extern void glMultiTexCoord4iARB(GLenum target, GLint s, GLint t, GLint r, GLint q);
-extern void glMultiTexCoord4ivARB(GLenum target, const GLint *v);
-extern void glMultiTexCoord4sARB(GLenum target, GLshort s, GLshort t, GLshort r, GLshort q);
-extern void glMultiTexCoord4svARB(GLenum target, const GLshort *v);
 
 } // extern "C"
-
-#endif

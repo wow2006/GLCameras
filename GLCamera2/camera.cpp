@@ -21,7 +21,7 @@
 //-----------------------------------------------------------------------------
 
 #include <cmath>
-#include "camera.h"
+#include "camera.hpp"
 
 const float Camera::DEFAULT_FOVX = 90.0f;
 const float Camera::DEFAULT_ZFAR = 1000.0f;
