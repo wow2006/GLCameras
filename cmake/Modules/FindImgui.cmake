@@ -81,6 +81,39 @@ target_link_libraries(
 )
 
 # ========================
+# IMGUI win32
+# ========================
+add_library(
+    Imgui_sdl2
+    STATIC
+)
+
+add_library(
+    Imgui::SDL2
+    ALIAS
+    Imgui_sdl2
+)
+
+target_sources(
+  Imgui_sdl2
+    PRIVATE
+    ${IMGUI_DIR}/backends/imgui_impl_sdl.cpp
+)
+
+target_include_directories(
+  Imgui_sdl2
+    SYSTEM PUBLIC
+    ${IMGUI_DIR}/backends/
+)
+
+target_link_libraries(
+  Imgui_sdl2
+    PUBLIC
+    Imgui::core
+    SDL2::SDL2
+)
+
+# ========================
 # IMGUI OpenGL
 # ========================
 if(NOT TARGET OpenGL::GL)

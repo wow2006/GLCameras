@@ -27,6 +27,8 @@ target_link_libraries(
   SDL2::SDL2
   SDL2::SDL2main
   stb::image
+  Imgui::OpenGL
+  Imgui::SDL2
 )
 
 target_compile_definitions(

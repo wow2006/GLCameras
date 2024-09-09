@@ -21,6 +21,7 @@ find_package(fmt CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(glbinding CONFIG REQUIRED)
 find_package(Imgui REQUIRED)
+find_package(SDL2 CONFIG REQUIRED)
 find_package(stb REQUIRED COMPONENTS image truetype)
 
 add_subdirectory(GLCamera1)

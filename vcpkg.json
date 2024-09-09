@@ -3,7 +3,8 @@
     "fmt",
     "glbinding",
     "glm",
-    "stb"
+    "stb",
+    "sdl2"
   ],
   "builtin-baseline": "bb002e69deb36c00e9ce21810f69eff349a833f7"
 }

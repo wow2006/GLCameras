@@ -43,10 +43,6 @@
 namespace {
 constexpr auto APP_TITLE = "OpenGL Quaternion Camera Demo";
 
-// GL_EXT_texture_filter_anisotropic
-constexpr auto GL_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE;
-constexpr auto GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF;
-
 const Vector3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
 constexpr float CAMERA_FOVX = 90.0F;
 const Vector3 CAMERA_POS(0.0F, 1.0F, 0.0F);
@@ -108,6 +104,7 @@ void GetMovementDirection(Vector3 &direction);
 bool Init();
 void InitApp();
 void InitGL();
+void InitImgui();
 GLuint LoadTexture(const char *pszFilename);
 GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT);
 void Log(const char *pszMessage);
@@ -206,27 +203,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   Cleanup();
   SDL_Quit();
   return EXIT_SUCCESS;
-}
-
-void Cleanup() { CleanupApp(); }
-
-void CleanupApp() {
-  if(g_floorColorMapTexture) {
-    glDeleteTextures(1, &g_floorColorMapTexture);
-    g_floorColorMapTexture = 0;
-  }
-
-  if(g_floorLightMapTexture) {
-    glDeleteTextures(1, &g_floorLightMapTexture);
-    g_floorLightMapTexture = 0;
-  }
-
-  if(g_floorDisplayList) {
-    glDeleteLists(g_floorDisplayList, 1);
-    g_floorDisplayList = 0;
-  }
-  SDL_DestroyWindow(g_pWindow);
-  g_pWindow = nullptr;
 }
 
 float GetElapsedTimeInSeconds() {
@@ -450,12 +426,21 @@ void InitGL() {
     [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {}, 0);
 #endif
 
-  // Check for GL_EXT_texture_filter_anisotropic support.
-  // if(SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic")) {
-  //   glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
-  // } else {
-  g_maxAnisotrophy = 1;
-  // }
+  glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
+
+  InitImgui();
+}
+
+void InitImgui() {
+  ZoneScoped;  // NOLINT
+
+  // Setup Dear ImGui binding
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  ImGui_ImplSDL2_InitForOpenGL(g_pWindow, g_glcontext);
+  ImGui_ImplOpenGL3_Init();
 }
 
 GLuint LoadTexture(const char *pszFilename) {
@@ -629,6 +614,16 @@ void RenderFloor() {
 void RenderFrame() {
   ZoneScoped;  // NOLINT
 
+  // Start the ImGui frame
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL2_NewFrame(g_pWindow);
+  ImGui::NewFrame();
+
+  {  // Imgui
+    RenderText();
+  }
+  ImGui::Render();
+
   glViewport(0, 0, g_windowResolution.x, g_windowResolution.y);
   glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -643,6 +638,8 @@ void RenderFrame() {
   glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
   RenderFloor();
+
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void RenderText() {
@@ -695,6 +692,11 @@ void RenderText() {
            << std::endl
            << "Press H to display help";
   }
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowResolution.x) / 2.0F, static_cast<float>(g_windowResolution.y)));
+  ImGui::Begin("Text", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
+  ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", output.str().c_str());
+  ImGui::End();
 }
 
 void UpdateCamera(float elapsedTimeSec) {
@@ -867,5 +869,41 @@ void createProgram() {
   g_uTexture1Locaion = glGetUniformLocation(g_Program, "uTexture1");
   if(g_uTexture1Locaion == -1) {
     throw std::runtime_error("\"uTexture0\" uniform doesn't exists.");
+  }
+}
+
+void Cleanup() {
+  CleanupApp();
+
+  // Cleanup
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL2_Shutdown();
+  ImGui::DestroyContext();
+
+  if(nullptr != g_glcontext) {
+    SDL_GL_DeleteContext(g_glcontext);
+    g_glcontext = nullptr;
+  }
+
+  if(nullptr != g_pWindow) {
+    SDL_DestroyWindow(g_pWindow);
+    g_pWindow = nullptr;
+  }
+}
+
+void CleanupApp() {
+  if(g_floorColorMapTexture) {
+    glDeleteTextures(1, &g_floorColorMapTexture);
+    g_floorColorMapTexture = 0;
+  }
+
+  if(g_floorLightMapTexture) {
+    glDeleteTextures(1, &g_floorLightMapTexture);
+    g_floorLightMapTexture = 0;
+  }
+
+  if(g_floorDisplayList) {
+    glDeleteLists(g_floorDisplayList, 1);
+    g_floorDisplayList = 0;
   }
 }
