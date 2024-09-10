@@ -51,37 +51,39 @@ target_compile_definitions(
 # ========================
 # IMGUI win32
 # ========================
-add_library(
-    Imgui_win32
-    STATIC
-)
+if(WIN32)
+  add_library(
+      Imgui_win32
+      STATIC
+  )
 
-add_library(
-    Imgui::Win32
-    ALIAS
-    Imgui_win32
-)
+  add_library(
+      Imgui::Win32
+      ALIAS
+      Imgui_win32
+  )
 
-target_sources(
-    Imgui_win32
-    PRIVATE
-    ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
-)
+  target_sources(
+      Imgui_win32
+      PRIVATE
+      ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
+  )
 
-target_include_directories(
-    Imgui_win32
-    SYSTEM PUBLIC
-    ${IMGUI_DIR}/backends/
-)
+  target_include_directories(
+      Imgui_win32
+      SYSTEM PUBLIC
+      ${IMGUI_DIR}/backends/
+  )
 
-target_link_libraries(
-    Imgui_win32
-    PUBLIC
-    Imgui::core
-)
+  target_link_libraries(
+      Imgui_win32
+      PUBLIC
+      Imgui::core
+  )
+endif()
 
 # ========================
-# IMGUI win32
+# IMGUI SDL2
 # ========================
 add_library(
     Imgui_sdl2
