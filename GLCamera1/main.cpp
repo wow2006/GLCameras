@@ -28,8 +28,6 @@
 //
 //-----------------------------------------------------------------------------
 // stb
-#include <SDL_video.h>
-#include <imgui_impl_sdl.h>
 #include <stb_image.h>
 // SDL2
 #include <SDL2/SDL.h>
@@ -44,11 +42,6 @@
 
 namespace {
 constexpr auto APP_TITLE = "OpenGL Vector Camera Demo";
-
-// Windows Vista compositing support.
-#if !defined(PFD_SUPPORT_COMPOSITION)
-#  define PFD_SUPPORT_COMPOSITION 0x00008000
-#endif
 
 constexpr glm::vec3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
 constexpr float CAMERA_FOVX = 90.0F;
@@ -103,9 +96,7 @@ SDL_GLContext g_glcontext = nullptr;
 // Functions Prototypes.
 //-----------------------------------------------------------------------------
 
-HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
 // void EnableVerticalSync(bool enableVerticalSync);
-bool ExtensionSupported(const char *pszExtensionName);
 float GetElapsedTimeInSeconds();
 void GetMovementDirection(glm::vec3 &direction);
 bool Init();
@@ -121,12 +112,10 @@ void ProcessUserInput();
 void RenderFloor();
 void RenderFrame();
 void RenderText();
-void SetProcessorAffinity();
 void ToggleFullScreen();
 void UpdateCamera(float elapsedTimeSec);
 void UpdateFrame(float elapsedTimeSec);
 void UpdateFrameRate(float elapsedTimeSec);
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void createBuffers();
 void createUniformBuffers();
 void createProgram();
@@ -171,7 +160,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
     bool bRunning = true;
     while(bRunning) {
       SDL_Event event;
-      while(SDL_PollEvent(&event)) {
+      while(SDL_PollEvent(&event) != 0) {
         if(SDL_QUIT == event.type) {
           bRunning = false;
         }
@@ -216,57 +205,21 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
 }
 
 float GetElapsedTimeInSeconds() {
-  ZoneScoped;  // NOLINT
-  // Returns the elapsed time (in seconds) since the last time this function
-  // was called. This elaborate setup is to guard against large spikes in
-  // the time returned by QueryPerformanceCounter().
+  static uint64_t lastTick = 0;
+  uint64_t currentTick = SDL_GetTicks64();
 
-  static const int MAX_SAMPLE_COUNT = 50;
-
-  static float frameTimes[MAX_SAMPLE_COUNT];
-  static float timeScale = 0.0f;
-  static float actualElapsedTimeSec = 0.0f;
-  static INT64 freq = 0;
-  static INT64 lastTime = 0;
-  static int sampleCount = 0;
-  static bool initialized = false;
-
-  INT64 time = 0;
-  float elapsedTimeSec = 0.0f;
-
-  if(!initialized) {
-    initialized = true;
-    QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER *>(&freq));
-    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&lastTime));
-    timeScale = 1.0F / static_cast<float>(freq);
+  // First time call, no previous tick to compare
+  if(lastTick == 0) {
+    lastTick = currentTick;
+    return 0.0F;
   }
 
-  QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&time));
-  elapsedTimeSec = static_cast<float>(time - lastTime) * timeScale;
-  lastTime = time;
+  // Calculate elapsed time
+  uint64_t elapsedTicks = currentTick - lastTick;
+  lastTick = currentTick;
 
-  if(fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0F) {
-    memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
-    frameTimes[0] = elapsedTimeSec;
-
-    if(sampleCount < MAX_SAMPLE_COUNT) {
-      ++sampleCount;
-    }
-  }
-
-  actualElapsedTimeSec = 0.0f;
-
-  for(int i = 0; i < sampleCount; ++i) {
-    actualElapsedTimeSec += frameTimes[i];
-  }
-
-  if(sampleCount > 0) {
-    actualElapsedTimeSec /= static_cast<float>(sampleCount);
-  }
-
-  return actualElapsedTimeSec;
+  return static_cast<float>(elapsedTicks) / 1000.0F;
 }
-
 void GetMovementDirection(glm::vec3 &direction) {
   ZoneScoped;  // NOLINT
   static bool moveForwardsPressed = false;
@@ -279,15 +232,15 @@ void GetMovementDirection(glm::vec3 &direction) {
   glm::vec3 velocity = g_camera.getCurrentVelocity();
   Keyboard &keyboard = Keyboard::instance();
 
-  direction = {0.0f, 0.0f, 0.0f};
+  direction = {0.0F, 0.0F, 0.0F};
 
   if(keyboard.keyDown(Keyboard::KEY_W)) {
     if(!moveForwardsPressed) {
       moveForwardsPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
     }
 
-    direction.z += 1.0f;
+    direction.z += 1.0F;
   } else {
     moveForwardsPressed = false;
   }
@@ -295,10 +248,10 @@ void GetMovementDirection(glm::vec3 &direction) {
   if(keyboard.keyDown(Keyboard::KEY_S)) {
     if(!moveBackwardsPressed) {
       moveBackwardsPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
     }
 
-    direction.z -= 1.0f;
+    direction.z -= 1.0F;
   } else {
     moveBackwardsPressed = false;
   }
@@ -306,10 +259,10 @@ void GetMovementDirection(glm::vec3 &direction) {
   if(keyboard.keyDown(Keyboard::KEY_D)) {
     if(!moveRightPressed) {
       moveRightPressed = true;
-      g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
+      g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
     }
 
-    direction.x += 1.0f;
+    direction.x += 1.0F;
   } else {
     moveRightPressed = false;
   }
@@ -317,10 +270,10 @@ void GetMovementDirection(glm::vec3 &direction) {
   if(keyboard.keyDown(Keyboard::KEY_A)) {
     if(!moveLeftPressed) {
       moveLeftPressed = true;
-      g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
+      g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
     }
 
-    direction.x -= 1.0f;
+    direction.x -= 1.0F;
   } else {
     moveLeftPressed = false;
   }
@@ -328,10 +281,10 @@ void GetMovementDirection(glm::vec3 &direction) {
   if(keyboard.keyDown(Keyboard::KEY_E)) {
     if(!moveUpPressed) {
       moveUpPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
+      g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
     }
 
-    direction.y += 1.0f;
+    direction.y += 1.0F;
   } else {
     moveUpPressed = false;
   }
@@ -339,10 +292,10 @@ void GetMovementDirection(glm::vec3 &direction) {
   if(keyboard.keyDown(Keyboard::KEY_Q)) {
     if(!moveDownPressed) {
       moveDownPressed = true;
-      g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
+      g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
     }
 
-    direction.y -= 1.0f;
+    direction.y -= 1.0F;
   } else {
     moveDownPressed = false;
   }
@@ -406,7 +359,7 @@ void InitGL() {
 
   SDL_GL_SetSwapInterval(1);
 
-  glbinding::initialize([](const char *name) { return (glbinding::ProcAddress)SDL_GL_GetProcAddress(name); });
+  glbinding::initialize([](const char *name) { return reinterpret_cast<glbinding::ProcAddress>(SDL_GL_GetProcAddress(name)); });
 
 #ifdef OPENGL_DEBUG
   glEnable(GL_DEBUG_OUTPUT);
@@ -437,12 +390,12 @@ void InitApp() {
 
   // Load textures.
   g_floorColorMapTexture = LoadTexture("floor_color_map.jpg");
-  if(!g_floorColorMapTexture) {
+  if(g_floorColorMapTexture == 0U) {
     throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
   }
 
   g_floorLightMapTexture = LoadTexture("floor_light_map.jpg");
-  if(!g_floorLightMapTexture) {
+  if(g_floorLightMapTexture == 0U) {
     throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
   }
 
@@ -454,8 +407,8 @@ void InitApp() {
   g_camera.setAcceleration(CAMERA_ACCELERATION);
   g_camera.setVelocity(CAMERA_VELOCITY);
 
-  g_cameraBoundsMax = {FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f};
-  g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0f, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0f};
+  g_cameraBoundsMax = {FLOOR_WIDTH / 2.0F, 4.0F, FLOOR_HEIGHT / 2.0F};
+  g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0F, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0F};
 
   // Mouse::instance().hideCursor(true);
   Mouse::instance().moveToWindowCenter();
@@ -475,7 +428,9 @@ GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, 
   ZoneScoped;  // NOLINT
 
   GLuint id = 0;
-  int width, height, channels;
+  int width = 0;
+  int height = 0;
+  int channels = 0;
   stbi_set_flip_vertically_on_load(1);
   void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
@@ -503,7 +458,7 @@ GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, 
 void Log(const char *pszMessage) {
   ZoneScoped;  // NOLINT
 
-  MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
+  // MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
 }
 
 void PerformCameraCollisionDetection() {
@@ -511,23 +466,29 @@ void PerformCameraCollisionDetection() {
   const glm::vec3 &pos = g_camera.getPosition();
   glm::vec3 newPos(pos);
 
-  if(pos.x > g_cameraBoundsMax.x)
+  if(pos.x > g_cameraBoundsMax.x) {
     newPos.x = g_cameraBoundsMax.x;
+  }
 
-  if(pos.x < g_cameraBoundsMin.x)
+  if(pos.x < g_cameraBoundsMin.x) {
     newPos.x = g_cameraBoundsMin.x;
+  }
 
-  if(pos.y > g_cameraBoundsMax.y)
+  if(pos.y > g_cameraBoundsMax.y) {
     newPos.y = g_cameraBoundsMax.y;
+  }
 
-  if(pos.y < g_cameraBoundsMin.y)
+  if(pos.y < g_cameraBoundsMin.y) {
     newPos.y = g_cameraBoundsMin.y;
+  }
 
-  if(pos.z > g_cameraBoundsMax.z)
+  if(pos.z > g_cameraBoundsMax.z) {
     newPos.z = g_cameraBoundsMax.z;
+  }
 
-  if(pos.z < g_cameraBoundsMin.z)
+  if(pos.z < g_cameraBoundsMin.z) {
     newPos.z = g_cameraBoundsMin.z;
+  }
 
   g_camera.setPosition(newPos);
 }
@@ -538,49 +499,57 @@ void ProcessUserInput() {
   Keyboard &keyboard = Keyboard::instance();
   Mouse &mouse = Mouse::instance();
 
-  if(keyboard.keyPressed(Keyboard::KEY_ESCAPE))
+  if(keyboard.keyPressed(Keyboard::KEY_ESCAPE)) {
     // PostMessage(g_hWnd, WM_CLOSE, 0, 0);
 
     if(keyboard.keyDown(Keyboard::KEY_LALT) || keyboard.keyDown(Keyboard::KEY_RALT)) {
-      if(keyboard.keyPressed(Keyboard::KEY_ENTER))
+      if(keyboard.keyPressed(Keyboard::KEY_ENTER)) {
         ToggleFullScreen();
+      }
     }
+  }
 
-  if(keyboard.keyPressed(Keyboard::KEY_H))
+  if(keyboard.keyPressed(Keyboard::KEY_H)) {
     g_displayHelp = !g_displayHelp;
+  }
 
-  if(keyboard.keyPressed(Keyboard::KEY_M))
+  if(keyboard.keyPressed(Keyboard::KEY_M)) {
     mouse.smoothMouse(!mouse.isMouseSmoothing());
+  }
 
-  if(keyboard.keyPressed(Keyboard::KEY_V))
+  if(keyboard.keyPressed(Keyboard::KEY_V)) {
     // EnableVerticalSync(!g_enableVerticalSync);
 
-  if(keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD)) {
-    g_cameraRotationSpeed += 0.01f;
+    if(keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD)) {
+      g_cameraRotationSpeed += 0.01F;
 
-    if(g_cameraRotationSpeed > 1.0f)
-      g_cameraRotationSpeed = 1.0f;
+      if(g_cameraRotationSpeed > 1.0F) {
+        g_cameraRotationSpeed = 1.0F;
+      }
+    }
   }
 
   if(keyboard.keyPressed(Keyboard::KEY_SUBTRACT) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT)) {
-    g_cameraRotationSpeed -= 0.01f;
+    g_cameraRotationSpeed -= 0.01F;
 
-    if(g_cameraRotationSpeed <= 0.0f)
-      g_cameraRotationSpeed = 0.01f;
+    if(g_cameraRotationSpeed <= 0.0F) {
+      g_cameraRotationSpeed = 0.01F;
+    }
   }
 
   if(keyboard.keyPressed(Keyboard::KEY_PERIOD)) {
-    mouse.setWeightModifier(mouse.weightModifier() + 0.1f);
+    mouse.setWeightModifier(mouse.weightModifier() + 0.1F);
 
-    if(mouse.weightModifier() > 1.0f)
-      mouse.setWeightModifier(1.0f);
+    if(mouse.weightModifier() > 1.0F) {
+      mouse.setWeightModifier(1.0F);
+    }
   }
 
   if(keyboard.keyPressed(Keyboard::KEY_COMMA)) {
-    mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
+    mouse.setWeightModifier(mouse.weightModifier() - 0.1F);
 
-    if(mouse.weightModifier() < 0.0f) {
-      mouse.setWeightModifier(0.0f);
+    if(mouse.weightModifier() < 0.0F) {
+      mouse.setWeightModifier(0.0F);
     }
   }
 
@@ -742,41 +711,6 @@ Press H to display help)",
   ImGui::End();
 }
 
-void SetProcessorAffinity() {
-  ZoneScoped;  // NOLINT
-
-  // Assign the current thread to one processor. This ensures that timing
-  // code runs on only one processor, and will not suffer any ill effects
-  // from power management.
-  //
-  // Based on DXUTSetProcessorAffinity() function from the DXUT framework.
-
-  DWORD_PTR dwProcessAffinityMask = 0;
-  DWORD_PTR dwSystemAffinityMask = 0;
-  HANDLE hCurrentProcess = GetCurrentProcess();
-
-  if(!GetProcessAffinityMask(hCurrentProcess, &dwProcessAffinityMask, &dwSystemAffinityMask))
-    return;
-
-  if(dwProcessAffinityMask) {
-    // Find the lowest processor that our process is allowed to run against.
-
-    DWORD_PTR dwAffinityMask = (dwProcessAffinityMask & ((~dwProcessAffinityMask) + 1));
-
-    // Set this as the processor that our thread must always run against.
-    // This must be a subset of the process affinity mask.
-
-    HANDLE hCurrentThread = GetCurrentThread();
-
-    if(hCurrentThread != INVALID_HANDLE_VALUE) {
-      SetThreadAffinityMask(hCurrentThread, dwAffinityMask);
-      CloseHandle(hCurrentThread);
-    }
-  }
-
-  CloseHandle(hCurrentProcess);
-}
-
 void ToggleFullScreen() {
   ZoneScoped;  // NOLINT
 
@@ -820,9 +754,9 @@ void ToggleFullScreen() {
 void UpdateCamera(float elapsedTimeSec) {
   ZoneScoped;  // NOLINT
 
-  float heading = 0.0f;
-  float pitch = 0.0f;
-  float roll = 0.0f;
+  float heading = 0.0F;
+  float pitch = 0.0F;
+  float roll = 0.0F;
   glm::vec3 direction;
   Mouse &mouse = Mouse::instance();
 
@@ -833,7 +767,7 @@ void UpdateCamera(float elapsedTimeSec) {
     pitch = mouse.yDistanceFromWindowCenter() * g_cameraRotationSpeed;
     heading = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
-    g_camera.rotate(heading, pitch, 0.0f);
+    g_camera.rotate(heading, pitch, 0.0F);
     break;
 
   case Camera::CameraBehavior::CAMERA_BEHAVIOR_FLIGHT:
@@ -842,7 +776,7 @@ void UpdateCamera(float elapsedTimeSec) {
     roll = -mouse.xDistanceFromWindowCenter() * g_cameraRotationSpeed;
 
     g_camera.rotate(heading, pitch, roll);
-    direction.x = 0.0f;  // ignore yaw motion when updating camera velocity
+    direction.x = 0.0F;  // ignore yaw motion when updating camera velocity
     break;
   }
 
@@ -867,16 +801,16 @@ void UpdateFrame(float elapsedTimeSec) {
 void UpdateFrameRate(float elapsedTimeSec) {
   ZoneScoped;  // NOLINT
 
-  static float accumTimeSec = 0.0f;
+  static float accumTimeSec = 0.0F;
   static int frames = 0;
 
   accumTimeSec += elapsedTimeSec;
 
-  if(accumTimeSec > 1.0f) {
+  if(accumTimeSec > 1.0F) {
     g_framesPerSecond = frames;
 
     frames = 0;
-    accumTimeSec = 0.0f;
+    accumTimeSec = 0.0F;
   } else {
     ++frames;
   }
@@ -1025,12 +959,12 @@ void CleanupApp() {
   }
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-  if(g_EBO) {
+  if(g_EBO != 0U) {
     glDeleteBuffers(1, &g_EBO);
   }
 
   glUseProgram(0);
-  if(g_Program) {
+  if(g_Program != 0U) {
     glDeleteProgram(g_Program);
   }
 
@@ -1040,11 +974,11 @@ void CleanupApp() {
   }
 
   glBindTexture(GL_TEXTURE_2D, 0);
-  if(g_floorColorMapTexture) {
+  if(g_floorColorMapTexture != 0U) {
     glDeleteTextures(1, &g_floorColorMapTexture);
   }
 
-  if(g_floorLightMapTexture) {
+  if(g_floorLightMapTexture != 0U) {
     glDeleteTextures(1, &g_floorLightMapTexture);
   }
 }

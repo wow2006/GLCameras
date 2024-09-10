@@ -21,8 +21,8 @@
 //-----------------------------------------------------------------------------
 
 #pragma once
+#include <SDL2/SDL.h>
 
-#include <imgui_impl_sdl.h>
 class Keyboard {
 public:
   enum Key {
@@ -135,13 +135,13 @@ public:
 
   static Keyboard &instance();
 
-  int getLastChar() const { return m_lastChar; }
+  [[nodiscard]] int getLastChar() const { return m_lastChar; }
 
-  bool keyDown(Key key) const { return (m_pCurrKeyStates[key] & 0x80) ? true : false; }
+  [[nodiscard]] bool keyDown(Key key) const { return (m_pCurrKeyStates[key] & 0x80) != 0; }
 
-  bool keyUp(Key key) const { return (m_pCurrKeyStates[key] & 0x80) ? false : true; }
+  [[nodiscard]] bool keyUp(Key key) const { return (m_pCurrKeyStates[key] & 0x80) == 0; }
 
-  bool keyPressed(Key key) const { return ((m_pCurrKeyStates[key] & 0x80) && !(m_pPrevKeyStates[key] & 0x80)) ? true : false; }
+  [[nodiscard]] bool keyPressed(Key key) const { return ((m_pCurrKeyStates[key] & 0x80) != 0) && ((m_pPrevKeyStates[key] & 0x80) == 0); }
 
   // void handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
   void update();
@@ -151,9 +151,9 @@ private:
   ~Keyboard();
 
   int m_lastChar;
-  BYTE m_keyStates[2][256];
-  BYTE *m_pCurrKeyStates;
-  BYTE *m_pPrevKeyStates;
+  uint8_t m_keyStates[2][256];
+  uint8_t *m_pCurrKeyStates;
+  uint8_t *m_pPrevKeyStates;
 };
 
 class Mouse {
@@ -167,33 +167,33 @@ public:
   Mouse &operator=(const Mouse &) = delete;
   Mouse &operator=(Mouse &&) = delete;
 
-  bool buttonDown(MouseButton button) const { return m_pCurrButtonStates[button]; }
+  [[nodiscard]] bool buttonDown(MouseButton button) const { return m_pCurrButtonStates[button]; }
 
-  bool buttonPressed(MouseButton button) const { return m_pCurrButtonStates[button] && !m_pPrevButtonStates[button]; }
+  [[nodiscard]] bool buttonPressed(MouseButton button) const { return m_pCurrButtonStates[button] && !m_pPrevButtonStates[button]; }
 
-  bool buttonUp(MouseButton button) const { return !m_pCurrButtonStates[button]; }
+  [[nodiscard]] bool buttonUp(MouseButton button) const { return !m_pCurrButtonStates[button]; }
 
-  bool cursorIsVisible() const { return m_cursorVisible; }
+  [[nodiscard]] bool cursorIsVisible() const { return m_cursorVisible; }
 
-  bool isMouseSmoothing() const { return m_enableFiltering; }
+  [[nodiscard]] bool isMouseSmoothing() const { return m_enableFiltering; }
 
-  float xDistanceFromWindowCenter() const { return m_ptDistFromWindowCenter.x; }
+  [[nodiscard]] float xDistanceFromWindowCenter() const { return m_ptDistFromWindowCenter.x; }
 
-  float yDistanceFromWindowCenter() const { return m_ptDistFromWindowCenter.y; }
+  [[nodiscard]] float yDistanceFromWindowCenter() const { return m_ptDistFromWindowCenter.y; }
 
-  int xPos() const { return m_ptCurrentPos.x; }
+  [[nodiscard]] int xPos() const { return m_ptCurrentPos.x; }
 
-  int yPos() const { return m_ptCurrentPos.y; }
+  [[nodiscard]] int yPos() const { return m_ptCurrentPos.y; }
 
-  float weightModifier() const { return m_weightModifier; }
+  [[nodiscard]] float weightModifier() const { return m_weightModifier; }
 
-  float wheelPos() const { return m_mouseWheel; }
+  [[nodiscard]] float wheelPos() const { return m_mouseWheel; }
 
   bool attach(SDL_Window* window);
   void detach();
   // void hideCursor(bool hide);
   void handleMsg(int delta);
-  void moveTo(UINT x, UINT y);
+  void moveTo(uint32_t x, uint32_t y);
   void moveToWindowCenter();
   void setWeightModifier(float weightModifier);
   void smoothMouse(bool smooth);
@@ -221,8 +221,8 @@ private:
   bool m_enableFiltering = true;
   bool m_cursorVisible = true;
   bool m_buttonStates[2][3];
-  bool *m_pCurrButtonStates = nullptr;
-  bool *m_pPrevButtonStates = nullptr;
+  bool *m_pCurrButtonStates = m_buttonStates[0];
+  bool *m_pPrevButtonStates = m_buttonStates[1];
   glm::ivec2 m_ptWindowCenterPos = {0, 0};
   glm::ivec2 m_ptCurrentPos = {0, 0};
 };

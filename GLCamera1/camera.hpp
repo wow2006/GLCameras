@@ -63,27 +63,27 @@ public:
   void updatePosition(const glm::vec3 &direction, float elapsedTimeSec);
 
   // Getter methods.
-  const glm::vec3 &getAcceleration() const;
+  [[nodiscard]] const glm::vec3 &getAcceleration() const;
 
-  CameraBehavior getBehavior() const;
+  [[nodiscard]] CameraBehavior getBehavior() const;
 
-  const glm::vec3 &getCurrentVelocity() const;
+  [[nodiscard]] const glm::vec3 &getCurrentVelocity() const;
 
-  const glm::vec3 &getPosition() const;
+  [[nodiscard]] const glm::vec3 &getPosition() const;
 
-  const glm::mat4 &getProjectionMatrix() const;
+  [[nodiscard]] const glm::mat4 &getProjectionMatrix() const;
 
-  const glm::vec3 &getVelocity() const;
+  [[nodiscard]] const glm::vec3 &getVelocity() const;
 
-  const glm::vec3 &getViewDirection() const;
+  [[nodiscard]] const glm::vec3 &getViewDirection() const;
 
-  const glm::mat4 &getViewMatrix() const;
+  [[nodiscard]] const glm::mat4 &getViewMatrix() const;
 
-  const glm::vec3 &getXAxis() const;
+  [[nodiscard]] const glm::vec3 &getXAxis() const;
 
-  const glm::vec3 &getYAxis() const;
+  [[nodiscard]] const glm::vec3 &getYAxis() const;
 
-  const glm::vec3 &getZAxis() const;
+  [[nodiscard]] const glm::vec3 &getZAxis() const;
 
   // Setter methods.
   void setAcceleration(float x, float y, float z);

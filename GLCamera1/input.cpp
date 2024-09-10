@@ -57,12 +57,10 @@ Keyboard::~Keyboard() {}
 
 void Keyboard::update() {
   ZoneScoped;  // NOLINT
-  BYTE *pTempKeyStates = m_pPrevKeyStates;
+  std::swap(m_pCurrKeyStates, m_pPrevKeyStates);
 
-  m_pPrevKeyStates = m_pCurrKeyStates;
-  m_pCurrKeyStates = pTempKeyStates;
-
-  GetKeyboardState(reinterpret_cast<BYTE *>(m_pCurrKeyStates));
+  auto keyStatus = SDL_GetKeyboardState(nullptr);
+  std::copy_n(keyStatus, 256, m_pCurrKeyStates);
 }
 
 //-----------------------------------------------------------------------------
@@ -214,11 +212,7 @@ void Mouse::smoothMouse(bool smooth) {
 void Mouse::update() {
   ZoneScoped;  // NOLINT
   // Update mouse buttons.
-
-  bool *pTempMouseStates = m_pPrevButtonStates;
-
-  m_pPrevButtonStates = m_pCurrButtonStates;
-  m_pCurrButtonStates = pTempMouseStates;
+  std::swap(m_pCurrButtonStates, m_pPrevButtonStates);
 
   int mouseX = 0, mouseY = 0;
   const auto mouseStatus = SDL_GetMouseState(&mouseX, &mouseY);
