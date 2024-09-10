@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <imgui_impl_sdl.h>
 class Keyboard {
 public:
   enum Key {
@@ -142,7 +143,7 @@ public:
 
   bool keyPressed(Key key) const { return ((m_pCurrKeyStates[key] & 0x80) && !(m_pPrevKeyStates[key] & 0x80)) ? true : false; }
 
-  void handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+  // void handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
   void update();
 
 private:
@@ -176,9 +177,9 @@ public:
 
   bool isMouseSmoothing() const { return m_enableFiltering; }
 
-  float xDistanceFromWindowCenter() const { return m_xDistFromWindowCenter; }
+  float xDistanceFromWindowCenter() const { return m_ptDistFromWindowCenter.x; }
 
-  float yDistanceFromWindowCenter() const { return m_yDistFromWindowCenter; }
+  float yDistanceFromWindowCenter() const { return m_ptDistFromWindowCenter.y; }
 
   int xPos() const { return m_ptCurrentPos.x; }
 
@@ -188,10 +189,10 @@ public:
 
   float wheelPos() const { return m_mouseWheel; }
 
-  bool attach(HWND hWnd);
+  bool attach(SDL_Window* window);
   void detach();
-  void handleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-  void hideCursor(bool hide);
+  // void hideCursor(bool hide);
+  void handleMsg(int delta);
   void moveTo(UINT x, UINT y);
   void moveToWindowCenter();
   void setWeightModifier(float weightModifier);
@@ -207,13 +208,12 @@ private:
   static const float DEFAULT_WEIGHT_MODIFIER;
   static const int HISTORY_BUFFER_SIZE = 10;
 
-  HWND m_hWnd = 0;
+  SDL_Window* m_window = nullptr;
   int m_historyBufferSize = HISTORY_BUFFER_SIZE;
   int m_wheelDelta = 0;
   int m_prevWheelDelta = 0;
   float m_mouseWheel = 0.0F;
-  float m_xDistFromWindowCenter = 0.0F;
-  float m_yDistFromWindowCenter = 0.0F;
+  glm::vec2 m_ptDistFromWindowCenter = {0, 0};
   float m_weightModifier = DEFAULT_WEIGHT_MODIFIER;
   float m_filtered[2];
   float m_history[HISTORY_BUFFER_SIZE * 2];
@@ -223,6 +223,6 @@ private:
   bool m_buttonStates[2][3];
   bool *m_pCurrButtonStates = nullptr;
   bool *m_pPrevButtonStates = nullptr;
-  POINT m_ptWindowCenterPos = {0, 0};
-  POINT m_ptCurrentPos = {0, 0};
+  glm::ivec2 m_ptWindowCenterPos = {0, 0};
+  glm::ivec2 m_ptCurrentPos = {0, 0};
 };

@@ -18,14 +18,16 @@ target_sources(
 target_link_libraries(
     GLCamera1
     PRIVATE
-    glm::glm
     fmt::fmt
     glbinding::glbinding
+    glm::glm
     Imgui::OpenGL
-    Imgui::Win32
-    stb::image
+    Imgui::SDL2
     OpenGL::GL
     options::options
+    SDL2::SDL2
+    SDL2::SDL2main
+    stb::image
 )
 
 target_compile_definitions(

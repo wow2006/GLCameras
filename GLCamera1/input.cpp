@@ -21,6 +21,7 @@
 //-----------------------------------------------------------------------------
 // Internal
 #include "input.hpp"
+#include <SDL2/SDL.h>
 
 //-----------------------------------------------------------------------------
 // Keyboard.
@@ -44,15 +45,15 @@ Keyboard::Keyboard() {
 
 Keyboard::~Keyboard() {}
 
-void Keyboard::handleMsg([[maybe_unused]] HWND hWnd, UINT msg, WPARAM wParam, [[maybe_unused]] LPARAM lParam) {
-  ZoneScoped;  // NOLINT
+// void Keyboard::handleMsg([[maybe_unused]] HWND hWnd, UINT msg, WPARAM wParam, [[maybe_unused]] LPARAM lParam) {
+//   ZoneScoped;  // NOLINT
 
-  switch(msg) {
-  case WM_CHAR: m_lastChar = static_cast<int>(wParam); break;
+//   switch(msg) {
+//   case WM_CHAR: m_lastChar = static_cast<int>(wParam); break;
 
-  default: break;
-  }
-}
+//   default: break;
+//   }
+// }
 
 void Keyboard::update() {
   ZoneScoped;  // NOLINT
@@ -88,16 +89,16 @@ Mouse::Mouse() = default;
 
 Mouse::~Mouse() { detach(); }
 
-bool Mouse::attach(HWND hWnd) {
+bool Mouse::attach(SDL_Window *window) {
   ZoneScoped;  // NOLINT
-  if(!hWnd) {
+  if(nullptr == window) {
     return false;
   }
 
-  m_hWnd = hWnd;
+  m_window = window;
 
   if(!m_cursorVisible) {
-    hideCursor(true);
+    // hideCursor(true);
   }
 
   m_filtered[0] = 0.0f;
@@ -108,11 +109,10 @@ bool Mouse::attach(HWND hWnd) {
   memset(m_history, 0, sizeof(m_history));
   memset(m_buttonStates, 0, sizeof(m_buttonStates));
 
-  RECT rcClient;
-
-  GetClientRect(m_hWnd, &rcClient);
-  m_ptWindowCenterPos.x = (rcClient.right - rcClient.left) / 2;
-  m_ptWindowCenterPos.y = (rcClient.bottom - rcClient.top) / 2;
+  int width, height;
+  SDL_GetWindowSize(window, &width, &height);
+  m_ptWindowCenterPos.x = width / 2;
+  m_ptWindowCenterPos.y = height / 2;
 
   return true;
 }
@@ -120,13 +120,13 @@ bool Mouse::attach(HWND hWnd) {
 void Mouse::detach() {
   ZoneScoped;  // NOLINT
   if(!m_cursorVisible) {
-    hideCursor(false);
+    // hideCursor(false);
 
     // Save the cursor visibility state in case attach() is called later.
     m_cursorVisible = false;
   }
 
-  m_hWnd = 0;
+  m_window = nullptr;
 }
 
 void Mouse::performMouseFiltering(float x, float y) {
@@ -166,38 +166,27 @@ void Mouse::performMouseFiltering(float x, float y) {
   m_filtered[1] = averageY / averageTotal;
 }
 
-void Mouse::handleMsg([[maybe_unused]] HWND hWnd, UINT msg, WPARAM wParam, [[maybe_unused]] LPARAM lParam) {
-  ZoneScoped;  // NOLINT
+void Mouse::handleMsg(int delta) { m_wheelDelta += delta; }
 
-  switch(msg) {
-  default: break;
+// void Mouse::hideCursor(bool hide) {
+//   ZoneScoped;  // NOLINT
+//   if(hide) {
+//     m_cursorVisible = false;
 
-  case WM_MOUSEWHEEL: m_wheelDelta += static_cast<int>(static_cast<int>(wParam) >> 16); break;
-  }
-}
+//     while(ShowCursor(FALSE) >= 0)
+//       ;  // do nothing
+//   } else {
+//     m_cursorVisible = true;
 
-void Mouse::hideCursor(bool hide) {
-  ZoneScoped;  // NOLINT
-  if(hide) {
-    m_cursorVisible = false;
-
-    while(ShowCursor(FALSE) >= 0)
-      ;  // do nothing
-  } else {
-    m_cursorVisible = true;
-
-    while(ShowCursor(TRUE) < 0)
-      ;  // do nothing
-  }
-}
+//     while(ShowCursor(TRUE) < 0)
+//       ;  // do nothing
+//   }
+// }
 
 void Mouse::moveTo(uint32_t x, uint32_t y) {
   ZoneScoped;  // NOLINT
 
-  POINT ptScreen = {static_cast<long>(x), static_cast<long>(y)};
-
-  ClientToScreen(m_hWnd, &ptScreen);
-  SetCursorPos(ptScreen.x, ptScreen.y);
+  SDL_WarpMouseInWindow(m_window, x, y);
 
   m_ptCurrentPos.x = static_cast<long>(x);
   m_ptCurrentPos.y = static_cast<long>(y);
@@ -231,9 +220,11 @@ void Mouse::update() {
   m_pPrevButtonStates = m_pCurrButtonStates;
   m_pCurrButtonStates = pTempMouseStates;
 
-  m_pCurrButtonStates[0] = (GetKeyState(VK_LBUTTON) & 0x8000) ? true : false;
-  m_pCurrButtonStates[1] = (GetKeyState(VK_RBUTTON) & 0x8000) ? true : false;
-  m_pCurrButtonStates[2] = (GetKeyState(VK_MBUTTON) & 0x8000) ? true : false;
+  int mouseX = 0, mouseY = 0;
+  const auto mouseStatus = SDL_GetMouseState(&mouseX, &mouseY);
+  m_pCurrButtonStates[0] = mouseStatus & SDL_BUTTON_LMASK;
+  m_pCurrButtonStates[1] = mouseStatus & SDL_BUTTON_RMASK;
+  m_pCurrButtonStates[2] = mouseStatus & SDL_BUTTON_MMASK;
 
   // Update mouse scroll wheel.
 
@@ -244,15 +235,10 @@ void Mouse::update() {
   // Do this once every update in case the window has changed position or
   // size.
 
-  RECT rcClient;
   int width;
   int height;
-
-  GetClientRect(m_hWnd, &rcClient);
-  width = (rcClient.right - rcClient.left);
-  height = (rcClient.bottom - rcClient.top);
-  m_ptWindowCenterPos.x = width / 2;
-  m_ptWindowCenterPos.y = height / 2;
+  SDL_GetWindowSize(m_window, &width, &height);
+  m_ptWindowCenterPos = {width / 2, height / 2};
 
   if(m_moveToWindowCenterPending) {
     m_moveToWindowCenterPending = false;
@@ -260,17 +246,16 @@ void Mouse::update() {
   }
 
   // Update mouse position.
-
-  GetCursorPos(&m_ptCurrentPos);
-  ScreenToClient(m_hWnd, &m_ptCurrentPos);
-
-  m_xDistFromWindowCenter = static_cast<float>(m_ptCurrentPos.x - m_ptWindowCenterPos.x);
-  m_yDistFromWindowCenter = static_cast<float>(m_ptWindowCenterPos.y - m_ptCurrentPos.y);
+  m_ptCurrentPos = {mouseX, mouseY};
+  m_ptDistFromWindowCenter = {static_cast<float>(m_ptCurrentPos.x - m_ptWindowCenterPos.x),
+                              static_cast<float>(m_ptWindowCenterPos.y - m_ptCurrentPos.y)};
+  // Fix SDL_GetMouseState fluctuation.
+  m_ptDistFromWindowCenter.x = glm::abs(static_cast<int>(m_ptDistFromWindowCenter.x)) == 1 ? 0 : m_ptDistFromWindowCenter.x;
+  m_ptDistFromWindowCenter.y = glm::abs(static_cast<int>(m_ptDistFromWindowCenter.y)) == 1 ? 0 : m_ptDistFromWindowCenter.y;
 
   if(m_enableFiltering) {
-    performMouseFiltering(m_xDistFromWindowCenter, m_yDistFromWindowCenter);
+    performMouseFiltering(m_ptDistFromWindowCenter.x, m_ptDistFromWindowCenter.y);
 
-    m_xDistFromWindowCenter = m_filtered[0];
-    m_yDistFromWindowCenter = m_filtered[1];
+    m_ptDistFromWindowCenter = {m_filtered[0], m_filtered[1]};
   }
 }
