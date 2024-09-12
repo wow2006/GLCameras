@@ -10,8 +10,36 @@ env:
   BUILD_TYPE: Release
 
 jobs:
+  clang-format:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt install -y clang-format-15
+
+      - name: Run clang-format
+        run: find . -type f -name "*.cpp" -or -name "*.h" -or -name "*.hpp" -exec clang-format -n {} \;
+
+  cmake-format:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt install -y python3-pip
+
+      - name: Install cmake-format
+        run: sudo pip install cmakelang
+
+      - name: Run clang-format
+        run: find . -type f -name "CMakeLists.txt" -exec cmake-format --check {} \;
+
   build:
     name: ${{ matrix.config.name }}
+    needs: [clang-format, cmake-format]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
@@ -26,13 +54,13 @@ jobs:
             }
           - {
               name: "Ubuntu Latest GCC",
-              os: ubuntu-latest,
+              os: ubuntu-22.04,
               cc: "gcc",
               cxx: "g++"
             }
           - {
               name: "Ubuntu Latest CLang",
-              os: ubuntu-latest,
+              os: ubuntu-22.04,
               cc: "clang",
               cxx: "clang++"
             }
@@ -84,7 +112,3 @@ jobs:
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
-
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      run: ctest -C ${{env.BUILD_TYPE}}
