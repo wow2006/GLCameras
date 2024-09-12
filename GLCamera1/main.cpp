@@ -220,6 +220,7 @@ float GetElapsedTimeInSeconds() {
 
   return static_cast<float>(elapsedTicks) / 1000.0F;
 }
+
 void GetMovementDirection(glm::vec3 &direction) {
   ZoneScoped;  // NOLINT
   static bool moveForwardsPressed = false;
@@ -455,11 +456,7 @@ GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, 
   return id;
 }
 
-void Log(const char *pszMessage) {
-  ZoneScoped;  // NOLINT
-
-  // MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
-}
+void Log(const char *pszMessage) { fmt::print("{}\n", pszMessage); }
 
 void PerformCameraCollisionDetection() {
   ZoneScoped;  // NOLINT

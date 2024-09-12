@@ -206,51 +206,20 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
 }
 
 float GetElapsedTimeInSeconds() {
-  // Returns the elapsed time (in seconds) since the last time this function
-  // was called. This elaborate setup is to guard against large spikes in
-  // the time returned by QueryPerformanceCounter().
+  static uint64_t lastTick = 0;
+  uint64_t currentTick = SDL_GetTicks64();
 
-  static const int MAX_SAMPLE_COUNT = 50;
-
-  static float frameTimes[MAX_SAMPLE_COUNT];
-  static float timeScale = 0.0F;
-  static float actualElapsedTimeSec = 0.0F;
-  static INT64 freq = 0;
-  static INT64 lastTime = 0;
-  static int sampleCount = 0;
-  static bool initialized = false;
-
-  INT64 time = 0;
-  float elapsedTimeSec = 0.0F;
-
-  if(!initialized) {
-    initialized = true;
-    QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER *>(&freq));
-    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&lastTime));
-    timeScale = 1.0F / freq;
+  // First time call, no previous tick to compare
+  if(lastTick == 0) {
+    lastTick = currentTick;
+    return 0.0F;
   }
 
-  QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER *>(&time));
-  elapsedTimeSec = (time - lastTime) * timeScale;
-  lastTime = time;
+  // Calculate elapsed time
+  uint64_t elapsedTicks = currentTick - lastTick;
+  lastTick = currentTick;
 
-  if(fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0F) {
-    memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
-    frameTimes[0] = elapsedTimeSec;
-
-    if(sampleCount < MAX_SAMPLE_COUNT)
-      ++sampleCount;
-  }
-
-  actualElapsedTimeSec = 0.0F;
-
-  for(int i = 0; i < sampleCount; ++i)
-    actualElapsedTimeSec += frameTimes[i];
-
-  if(sampleCount > 0)
-    actualElapsedTimeSec /= sampleCount;
-
-  return actualElapsedTimeSec;
+  return static_cast<float>(elapsedTicks) / 1000.0F;
 }
 
 void GetMovementDirection(Vector3 &direction) {
@@ -476,7 +445,7 @@ GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, 
   return id;
 }
 
-void Log(const char *pszMessage) { MessageBox(0, pszMessage, "Error", MB_ICONSTOP); }
+void Log(const char *pszMessage) { fmt::print("{}\n", pszMessage); }
 
 void PerformCameraCollisionDetection() {
   const Vector3 &pos = g_camera.getPosition();
