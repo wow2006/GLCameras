@@ -54,9 +54,11 @@ jobs:
 
     - name: Install vcpkg
       run: |
-        git clone https://github.com/Microsoft/vcpkg.git
-        cd vcpkg
-        ./bootstrap-vcpkg.sh
+        if [ ! -d "${{ github.workspace }}/vcpkg" ]; then
+          git clone https://github.com/Microsoft/vcpkg.git
+          cd vcpkg
+          ./bootstrap-vcpkg.sh
+        fi
       shell: bash
 
     - name: Configure CMake (Windows)
