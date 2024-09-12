@@ -20,11 +20,7 @@ GLint createShader(GLenum type, const char *shaderSource) {
   if(result != 1) {
     std::array<GLchar, MessageLength> message = {};
     glGetShaderInfoLog(shaderID, MessageLength, nullptr, message.data());
-#ifdef _CONSOLE
     fmt::print(fg(fmt::color::red), "ERROR: {}\n", message.data());
-#else
-    MessageBoxA(NULL, message.data(), "Error", MB_OK | MB_ICONEXCLAMATION);
-#endif
     return InvalidShader;
   }
   return static_cast<GLint>(shaderID);
@@ -47,11 +43,7 @@ GLint createProgram(GLint vertexShaderID, GLint fragmentShaderID) {
   if(result != 1) {
     std::array<GLchar, MessageLength> message = {};
     glGetProgramInfoLog(programID, MessageLength, nullptr, message.data());
-#ifdef _CONSOLE
     fmt::print(fg(fmt::color::red), "ERROR: {}\n", message.data());
-#else
-    MessageBoxA(NULL, message.data(), "Error", MB_OK | MB_ICONEXCLAMATION);
-#endif
     return InvalidProgram;
   }
   return static_cast<GLint>(programID);
