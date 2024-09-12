@@ -30,6 +30,12 @@ jobs:
               cc: "gcc",
               cxx: "g++"
             }
+          - {
+              name: "Ubuntu Latest CLang",
+              os: ubuntu-latest,
+              cc: "clang",
+              cxx: "clang++"
+            }
 
     steps:
     - uses: actions/checkout@v4
