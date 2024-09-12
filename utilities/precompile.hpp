@@ -24,30 +24,8 @@ using namespace gl;
 #include <imgui_impl_sdl.h>
 #include <imgui_impl_opengl3.h>
 // OS
-#ifdef _WIN32
-#include <windows.h>
-#include <VersionHelpers.h>
-
-#if defined(_DEBUG)
-#include <crtdbg.h>
-#endif
-
-inline double get_time() {
-    LARGE_INTEGER t, f;
-    QueryPerformanceCounter(&t);
-    QueryPerformanceFrequency(&f);
-    return (double)t.QuadPart * 1000.0 / (double)f.QuadPart;
-}
-#else
-#include <sys/time.h>
-#include <sys/resource.h>
-
-inline double get_time() {
-    struct timeval t;
-    struct timezone tzp;
-    gettimeofday(&t, &tzp);
-    return t.tv_usec * 0.002;
-}
+#if defined(_WIN32) && defined(_DEBUG)
+#  include <crtdbg.h>
 #endif
 // glm
 #include <glm/glm.hpp>

@@ -20,7 +20,7 @@ jobs:
         run: sudo apt install -y clang-format-15
 
       - name: Run clang-format
-        run: find . -type f -name "*.cpp" -or -name "*.h" -or -name "*.hpp" -exec clang-format -n {} \;
+        run: find . -type f -name "*.cpp" -or -name "*.h" -or -name "*.hpp" -not -path "*/GLCamera3/*" -not -path "*/thirdparty/*" -not -path "*/GLThirdPersonCamera1/*" -not -path "*/GLThirdPersonCamera2/*" -not -path "*/OrbitCamera/*" -not -path "*/Trackball/*" -exec clang-format -n --Werror {} \;
 
   cmake-format:
     runs-on: ubuntu-22.04
