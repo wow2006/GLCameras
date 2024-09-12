@@ -84,7 +84,7 @@ jobs:
         path: |
           ${{ github.workspace }}/vcpkg
           ${{ github.workspace }}/build/vcpkg_installed
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/vcpkg.json') }}
+        key: ${{ runner.os }}-${{ matrix.config.cc }}-${{ env.cache-name }}-${{ hashFiles('**/vcpkg.json') }}
 
     - name: Install vcpkg
       run: |
