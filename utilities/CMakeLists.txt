@@ -4,6 +4,8 @@ add_library(
   STATIC
   input.hpp
   input.cpp
+  shaders.hpp
+  shaders.cpp
 )
 
 add_library(
@@ -22,6 +24,8 @@ target_link_libraries(
   utilities
   PUBLIC
   fmt::fmt
+  glbinding::glbinding
   glm::glm
+  OpenGL::GL
   SDL2::SDL2
 )

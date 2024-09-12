@@ -3,7 +3,7 @@ project(GLCamera1 LANGUAGES CXX)
 
 add_executable(GLCamera1 WIN32)
 
-target_sources(GLCamera1 PRIVATE main.cpp camera.cpp shaders.cpp)
+target_sources(GLCamera1 PRIVATE main.cpp camera.cpp)
 
 target_link_libraries(
   GLCamera1

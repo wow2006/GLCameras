@@ -1,6 +1,9 @@
 // Internal
 #include "shaders.hpp"
 
+#include <fmt/printf.h>
+#include <fmt/color.h>
+
 namespace {
 constexpr auto InvalidShader = -1;
 constexpr auto InvalidProgram = -1;

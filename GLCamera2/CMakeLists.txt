@@ -6,8 +6,7 @@ add_executable(
   # WIN32
 )
 
-target_sources(GLCamera2 PRIVATE camera.cpp main.cpp mathlib.cpp
-                                 shaders.cpp)
+target_sources(GLCamera2 PRIVATE camera.cpp main.cpp mathlib.cpp)
 
 target_link_libraries(
   GLCamera2
