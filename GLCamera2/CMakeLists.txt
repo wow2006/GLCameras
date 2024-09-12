@@ -23,9 +23,9 @@ target_link_libraries(
 
 target_include_directories(GLCamera2 SYSTEM PRIVATE ${Stb_INCLUDE_DIR})
 
-target_compile_definitions(GLCamera2 PRIVATE # OPENGL_DEBUG
-                                             GLM_ENABLE_EXPERIMENTAL
-                                             STB_IMAGE_IMPLEMENTATION)
+target_compile_definitions(
+  GLCamera2 PRIVATE # OPENGL_DEBUG
+                    GLM_ENABLE_EXPERIMENTAL STB_IMAGE_IMPLEMENTATION)
 
 set_target_properties(
   GLCamera2
