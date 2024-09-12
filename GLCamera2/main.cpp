@@ -366,7 +366,7 @@ void InitApp() {
   g_cameraBoundsMax.set(FLOOR_WIDTH / 2.0F, 4.0F, FLOOR_HEIGHT / 2.0F);
   g_cameraBoundsMin.set(-FLOOR_WIDTH / 2.0F, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0F);
 
-  // Mouse::instance().hideCursor(true);
+  Mouse::instance().hideCursor(true);
   Mouse::instance().moveToWindowCenter();
 
   createBuffers();

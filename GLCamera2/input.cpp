@@ -20,6 +20,7 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
+#include <SDL_events.h>
 #include <algorithm>
 
 #include <SDL2/SDL_mouse.h>
@@ -88,9 +89,9 @@ bool Mouse::attach(SDL_Window *window) {
     return false;
   }
 
-  //if(!m_cursorVisible) {
-  //  hideCursor(true);
-  //}
+  if(!m_cursorVisible) {
+    hideCursor(true);
+  }
 
   m_filtered[0] = 0.0F;
   m_filtered[1] = 0.0F;
@@ -112,7 +113,7 @@ bool Mouse::attach(SDL_Window *window) {
 
 void Mouse::detach() {
   if(!m_cursorVisible) {
-    // hideCursor(false);
+    hideCursor(false);
 
     // Save the cursor visibility state in case attach() is called later.
     m_cursorVisible = false;
@@ -162,14 +163,14 @@ void Mouse::handleMsg(int delta) { m_wheelDelta += delta; }
 void Mouse::hideCursor(bool hide) {
   if(hide) {
     m_cursorVisible = false;
-
-    while(ShowCursor(FALSE) >= 0)
-      ;  // do nothing
+    if(SDL_DISABLE != SDL_ShowCursor(SDL_DISABLE)) {
+      fmt::print(stderr, fg(fmt::color::red), "Failed to hide cursor \"{}\"\n", SDL_GetError());
+    }
   } else {
     m_cursorVisible = true;
-
-    while(ShowCursor(TRUE) < 0)
-      ;  // do nothing
+    if(SDL_ENABLE != SDL_ShowCursor(SDL_ENABLE)) {
+      fmt::print(stderr, fg(fmt::color::red), "Failed to show cursor \"{}\"\n", SDL_GetError());
+    }
   }
 }
 
@@ -198,8 +199,8 @@ void Mouse::update() {
   m_pPrevButtonStates = m_pCurrButtonStates;
   m_pCurrButtonStates = pTempMouseStates;
 
-  int mouseX = 0, mouseY = 0;
-  const auto mouseStatus = SDL_GetMouseState(&mouseX, &mouseY);
+  glm::ivec2 mousePos;
+  const auto mouseStatus = SDL_GetMouseState(&mousePos.x, &mousePos.y);
   m_pCurrButtonStates[0] = mouseStatus & SDL_BUTTON_LMASK;
   m_pCurrButtonStates[1] = mouseStatus & SDL_BUTTON_RMASK;
   m_pCurrButtonStates[2] = mouseStatus & SDL_BUTTON_MMASK;
@@ -213,30 +214,21 @@ void Mouse::update() {
   // Do this once every update in case the window has changed position or
   // size.
 
-  int width;
-  int height;
-  SDL_GetWindowSize(m_window, &width, &height);
-  m_ptWindowCenterPos = {width / 2, height / 2};
+  glm::ivec2 windowRes{};
+  SDL_GetWindowSize(m_window, &windowRes.x, &windowRes.y);
+  m_ptWindowCenterPos = windowRes / 2;
 
   if(m_moveToWindowCenterPending) {
     m_moveToWindowCenterPending = false;
     moveToWindowCenter();
   }
 
-  m_ptCurrentPos = {mouseX, mouseY};
+  m_ptCurrentPos = mousePos;
   m_ptDistFromWindowCenter = {static_cast<float>(m_ptCurrentPos.x - m_ptWindowCenterPos.x),
                               static_cast<float>(m_ptWindowCenterPos.y - m_ptCurrentPos.y)};
   // Fix SDL_GetMouseState fluctuation.
   m_ptDistFromWindowCenter.x = glm::abs(static_cast<int>(m_ptDistFromWindowCenter.x)) == 1 ? 0 : m_ptDistFromWindowCenter.x;
   m_ptDistFromWindowCenter.y = glm::abs(static_cast<int>(m_ptDistFromWindowCenter.y)) == 1 ? 0 : m_ptDistFromWindowCenter.y;
-
-  fmt::print("({}, {}) ({}, {}) ({}, {})\n",
-             m_ptCurrentPos.x,
-             m_ptCurrentPos.y,
-             m_ptWindowCenterPos.x,
-             m_ptWindowCenterPos.y,
-             m_ptDistFromWindowCenter.x,
-             m_ptDistFromWindowCenter.y);
 
   if(m_enableFiltering) {
     performMouseFiltering(m_ptDistFromWindowCenter.x, m_ptDistFromWindowCenter.y);
