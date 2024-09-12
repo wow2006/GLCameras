@@ -98,7 +98,6 @@ static GLint g_uTexture1Locaion;
 
 void Cleanup();
 void CleanupApp();
-HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
 float GetElapsedTimeInSeconds();
 void GetMovementDirection(Vector3 &direction);
 bool Init();
