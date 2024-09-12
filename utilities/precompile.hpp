@@ -49,13 +49,6 @@ inline double get_time() {
     return t.tv_usec * 0.002;
 }
 #endif
-// Tracy
-#ifdef TRACY_ENABLE
-#include <Tracy.hpp>
-#else
-#  define ZoneScoped
-#  define FrameMark
-#endif
 // glm
 #include <glm/glm.hpp>
 #include <glm/gtx/type_trait.hpp>

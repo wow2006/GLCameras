@@ -223,7 +223,6 @@ float GetElapsedTimeInSeconds() {
 }
 
 void GetMovementDirection(glm::vec3 &direction) {
-  ZoneScoped;  // NOLINT
   static bool moveForwardsPressed = false;
   static bool moveBackwardsPressed = false;
   static bool moveRightPressed = false;
@@ -304,7 +303,6 @@ void GetMovementDirection(glm::vec3 &direction) {
 }
 
 bool Init() {
-  ZoneScoped;  // NOLINT
 
   try {
     InitGL();
@@ -376,7 +374,6 @@ void InitGL() {
 }
 
 void InitImgui() {
-  ZoneScoped;  // NOLINT
 
   // Setup Dear ImGui binding
   IMGUI_CHECKVERSION();
@@ -388,7 +385,6 @@ void InitImgui() {
 }
 
 void InitApp() {
-  ZoneScoped;  // NOLINT
 
   // Load textures.
   g_floorColorMapTexture = LoadTexture("floor_color_map.jpg");
@@ -421,13 +417,11 @@ void InitApp() {
 }
 
 GLuint LoadTexture(const char *pszFilename) {
-  ZoneScoped;  // NOLINT
 
   return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_REPEAT);
 }
 
 GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT) {
-  ZoneScoped;  // NOLINT
 
   GLuint id = 0;
   int width = 0;
@@ -460,7 +454,6 @@ GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, 
 void Log(const char *pszMessage) { fmt::print("{}\n", pszMessage); }
 
 void PerformCameraCollisionDetection() {
-  ZoneScoped;  // NOLINT
   const glm::vec3 &pos = g_camera.getPosition();
   glm::vec3 newPos(pos);
 
@@ -492,7 +485,6 @@ void PerformCameraCollisionDetection() {
 }
 
 void ProcessUserInput() {
-  ZoneScoped;  // NOLINT
 
   Keyboard &keyboard = Keyboard::instance();
   Mouse &mouse = Mouse::instance();
@@ -568,7 +560,6 @@ void ProcessUserInput() {
 }
 
 void RenderFloor() {
-  ZoneScoped;  // NOLINT
 
   glUseProgram(g_Program);
 
@@ -606,7 +597,6 @@ void RenderFloor() {
 }
 
 void RenderFrame() {
-  ZoneScoped;  // NOLINT
 
   // Start the ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
@@ -640,7 +630,6 @@ void RenderFrame() {
 }
 
 void RenderText() {
-  ZoneScoped;  // NOLINT
 
   ImGui::SetNextWindowPos(ImVec2(0, 0));
   ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowResolution.x) / 2.0F, static_cast<float>(g_windowResolution.y)));
@@ -712,7 +701,6 @@ Press H to display help)",
 }
 
 void ToggleFullScreen() {
-  ZoneScoped;  // NOLINT
 
   // static DWORD savedExStyle;
   // static DWORD savedStyle;
@@ -752,7 +740,6 @@ void ToggleFullScreen() {
 }
 
 void UpdateCamera(float elapsedTimeSec) {
-  ZoneScoped;  // NOLINT
 
   float heading = 0.0F;
   float pitch = 0.0F;
@@ -787,7 +774,6 @@ void UpdateCamera(float elapsedTimeSec) {
 }
 
 void UpdateFrame(float elapsedTimeSec) {
-  ZoneScoped;  // NOLINT
 
   UpdateFrameRate(elapsedTimeSec);
 
@@ -799,7 +785,6 @@ void UpdateFrame(float elapsedTimeSec) {
 }
 
 void UpdateFrameRate(float elapsedTimeSec) {
-  ZoneScoped;  // NOLINT
 
   static float accumTimeSec = 0.0F;
   static int frames = 0;
@@ -817,7 +802,6 @@ void UpdateFrameRate(float elapsedTimeSec) {
 }
 
 void createBuffers() {
-  ZoneScoped;  // NOLINT
 
   glGenVertexArrays(1, &g_VAO);
   glBindVertexArray(g_VAO);
@@ -853,7 +837,6 @@ void createUniformBuffers() {
 }
 
 void createProgram() {
-  ZoneScoped;  // NOLINT
 
   constexpr std::string_view VertexShader = R"(
   #version 460 core
@@ -927,7 +910,6 @@ void createProgram() {
 }
 
 void Cleanup() {
-  ZoneScoped;  // NOLINT
   CleanupApp();
 
   // Cleanup
@@ -946,7 +928,6 @@ void Cleanup() {
 }
 
 void CleanupApp() {
-  ZoneScoped;  // NOLINT
 
   glBindVertexArray(0);
   if(g_VAO != 0) {

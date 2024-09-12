@@ -23,7 +23,6 @@
 #include "camera.hpp"
 
 Camera::Camera() {
-  ZoneScoped;  // NOLINT
   m_behavior = CameraBehavior::CAMERA_BEHAVIOR_FLIGHT;
 
   m_fovx = DEFAULT_FOVX;
@@ -57,7 +56,6 @@ void Camera::lookAt(const glm::vec3 &target) {
 
 void Camera::move(float dx, float dy, float dz)
 {
-    ZoneScoped; // NOLINT
   // Moves the camera by dx world units to the left or right; dy
   // world units upwards or downwards; and dz world units forwards
   // or backwards.
@@ -83,7 +81,6 @@ void Camera::move(float dx, float dy, float dz)
 }
 
 void Camera::move(const glm::vec3 &direction, const glm::vec3 &amount) {
-    ZoneScoped; // NOLINT
   // Moves the camera by the specified amount of world units in the specified
   // direction in world space.
 
@@ -96,7 +93,6 @@ void Camera::move(const glm::vec3 &direction, const glm::vec3 &amount) {
 
 void Camera::perspective(float fovx, float aspect, float znear, float zfar)
 {
-    ZoneScoped; // NOLINT
   // Construct a projection matrix based on the horizontal field of view
   // 'fovx' rather than the more traditional vertical field of view 'fovy'.
 
@@ -133,7 +129,6 @@ void Camera::perspective(float fovx, float aspect, float znear, float zfar)
 }
 
 void Camera::rotate(float headingDegrees, float pitchDegrees, float rollDegrees) {
-  ZoneScoped;  // NOLINT
 
   // Rotates the camera based on its current behavior.
   // Note that not all behaviors support rolling.
@@ -149,7 +144,6 @@ void Camera::rotate(float headingDegrees, float pitchDegrees, float rollDegrees)
 
 void Camera::rotateFlight(float headingDegrees, float pitchDegrees, float rollDegrees)
 {
-    ZoneScoped; // NOLINT
     glm::mat4 rotMtx;
 
   // Rotate camera's existing x and z axes about its existing y axis.
@@ -175,7 +169,6 @@ void Camera::rotateFlight(float headingDegrees, float pitchDegrees, float rollDe
 }
 
 void Camera::rotateFirstPerson(float headingDegrees, float pitchDegrees) {
-    ZoneScoped;  // NOLINT
 
     m_accumPitchDegrees += pitchDegrees;
 

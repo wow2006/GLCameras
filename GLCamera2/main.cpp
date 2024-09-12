@@ -400,7 +400,6 @@ void InitGL() {
 }
 
 void InitImgui() {
-  ZoneScoped;  // NOLINT
 
   // Setup Dear ImGui binding
   IMGUI_CHECKVERSION();
@@ -416,7 +415,6 @@ GLuint LoadTexture(const char *pszFilename) {
 }
 
 GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT) {
-  ZoneScoped;  // NOLINT
 
   GLuint id = 0;
   int width, height, channels;
@@ -542,7 +540,6 @@ void ProcessUserInput() {
 }
 
 void RenderFloor() {
-  ZoneScoped;  // NOLINT
 
   glUseProgram(g_Program);
 
@@ -580,7 +577,6 @@ void RenderFloor() {
 }
 
 void RenderFrame() {
-  ZoneScoped;  // NOLINT
 
   // Start the ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
@@ -731,7 +727,6 @@ void ToggleFullScreen() {
 }
 
 void createBuffers() {
-  ZoneScoped;  // NOLINT
 
   glGenVertexArrays(1, &g_VAO);
   glBindVertexArray(g_VAO);
@@ -767,7 +762,6 @@ void createUniformBuffers() {
 }
 
 void createProgram() {
-  ZoneScoped;  // NOLINT
 
   constexpr std::string_view VertexShader = R"(
   #version 460 core
