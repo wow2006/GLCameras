@@ -23,6 +23,7 @@ find_package(Imgui REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 
+add_subdirectory(utilities)
 add_subdirectory(GLCamera1)
 add_subdirectory(GLCamera2)
 #add_subdirectory(GLCamera3)

@@ -3,7 +3,7 @@ project(GLCamera1 LANGUAGES CXX)
 
 add_executable(GLCamera1 WIN32)
 
-target_sources(GLCamera1 PRIVATE main.cpp camera.cpp shaders.cpp input.cpp)
+target_sources(GLCamera1 PRIVATE main.cpp camera.cpp shaders.cpp)
 
 target_link_libraries(
   GLCamera1
@@ -15,7 +15,8 @@ target_link_libraries(
           OpenGL::GL
           options::options
           SDL2::SDL2
-          SDL2::SDL2main)
+          SDL2::SDL2main
+          camera::utilities)
 
 target_include_directories(GLCamera1 SYSTEM PRIVATE ${Stb_INCLUDE_DIR})
 

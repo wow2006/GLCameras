@@ -28,6 +28,7 @@
 //
 //-----------------------------------------------------------------------------
 // stb
+#include <SDL_scancode.h>
 #include <stb_image.h>
 // SDL2
 #include <SDL2/SDL.h>
@@ -235,7 +236,7 @@ void GetMovementDirection(glm::vec3 &direction) {
 
   direction = {0.0F, 0.0F, 0.0F};
 
-  if(keyboard.keyDown(Keyboard::KEY_W)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_W)) {
     if(!moveForwardsPressed) {
       moveForwardsPressed = true;
       g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
@@ -246,7 +247,7 @@ void GetMovementDirection(glm::vec3 &direction) {
     moveForwardsPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_S)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_S)) {
     if(!moveBackwardsPressed) {
       moveBackwardsPressed = true;
       g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
@@ -257,7 +258,7 @@ void GetMovementDirection(glm::vec3 &direction) {
     moveBackwardsPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_D)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_D)) {
     if(!moveRightPressed) {
       moveRightPressed = true;
       g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
@@ -268,7 +269,7 @@ void GetMovementDirection(glm::vec3 &direction) {
     moveRightPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_A)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_A)) {
     if(!moveLeftPressed) {
       moveLeftPressed = true;
       g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
@@ -279,7 +280,7 @@ void GetMovementDirection(glm::vec3 &direction) {
     moveLeftPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_E)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_E)) {
     if(!moveUpPressed) {
       moveUpPressed = true;
       g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
@@ -290,7 +291,7 @@ void GetMovementDirection(glm::vec3 &direction) {
     moveUpPressed = false;
   }
 
-  if(keyboard.keyDown(Keyboard::KEY_Q)) {
+  if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_Q)) {
     if(!moveDownPressed) {
       moveDownPressed = true;
       g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
@@ -496,6 +497,7 @@ void ProcessUserInput() {
   Keyboard &keyboard = Keyboard::instance();
   Mouse &mouse = Mouse::instance();
 
+#if 0
   if(keyboard.keyPressed(Keyboard::KEY_ESCAPE)) {
     // PostMessage(g_hWnd, WM_CLOSE, 0, 0);
 
@@ -505,19 +507,20 @@ void ProcessUserInput() {
       }
     }
   }
+#endif
 
-  if(keyboard.keyPressed(Keyboard::KEY_H)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_H)) {
     g_displayHelp = !g_displayHelp;
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_M)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_M)) {
     mouse.smoothMouse(!mouse.isMouseSmoothing());
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_V)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_V)) {
     // EnableVerticalSync(!g_enableVerticalSync);
 
-    if(keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD)) {
+    if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_EQUALS) || keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_KP_PLUS)) {
       g_cameraRotationSpeed += 0.01F;
 
       if(g_cameraRotationSpeed > 1.0F) {
@@ -526,7 +529,7 @@ void ProcessUserInput() {
     }
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_SUBTRACT) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_MINUS) || keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_KP_MINUS)) {
     g_cameraRotationSpeed -= 0.01F;
 
     if(g_cameraRotationSpeed <= 0.0F) {
@@ -534,7 +537,7 @@ void ProcessUserInput() {
     }
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_PERIOD)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_PERIOD)) {
     mouse.setWeightModifier(mouse.weightModifier() + 0.1F);
 
     if(mouse.weightModifier() > 1.0F) {
@@ -542,7 +545,7 @@ void ProcessUserInput() {
     }
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_COMMA)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_COMMA)) {
     mouse.setWeightModifier(mouse.weightModifier() - 0.1F);
 
     if(mouse.weightModifier() < 0.0F) {
@@ -550,7 +553,7 @@ void ProcessUserInput() {
     }
   }
 
-  if(keyboard.keyPressed(Keyboard::KEY_SPACE)) {
+  if(keyboard.keyPressed(SDL_Scancode::SDL_SCANCODE_SPACE)) {
     g_flightModeEnabled = !g_flightModeEnabled;
 
     if(g_flightModeEnabled) {

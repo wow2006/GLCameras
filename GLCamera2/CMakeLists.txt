@@ -6,7 +6,7 @@ add_executable(
   # WIN32
 )
 
-target_sources(GLCamera2 PRIVATE camera.cpp input.cpp main.cpp mathlib.cpp
+target_sources(GLCamera2 PRIVATE camera.cpp main.cpp mathlib.cpp
                                  shaders.cpp)
 
 target_link_libraries(
@@ -19,7 +19,8 @@ target_link_libraries(
           SDL2::SDL2
           SDL2::SDL2main
           Imgui::OpenGL
-          Imgui::SDL2)
+          Imgui::SDL2
+          camera::utilities)
 
 target_include_directories(GLCamera2 SYSTEM PRIVATE ${Stb_INCLUDE_DIR})
 
