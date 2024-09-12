@@ -18,12 +18,14 @@ target_link_libraries(
           options::options
           SDL2::SDL2
           SDL2::SDL2main
-          stb::image
           Imgui::OpenGL
           Imgui::SDL2)
 
+target_include_directories(GLCamera2 SYSTEM PRIVATE ${Stb_INCLUDE_DIR})
+
 target_compile_definitions(GLCamera2 PRIVATE # OPENGL_DEBUG
-                                             GLM_ENABLE_EXPERIMENTAL)
+                                             GLM_ENABLE_EXPERIMENTAL
+                                             STB_IMAGE_IMPLEMENTATION)
 
 set_target_properties(
   GLCamera2
