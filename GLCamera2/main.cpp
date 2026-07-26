@@ -43,12 +43,12 @@
 namespace {
 constexpr auto APP_TITLE = "OpenGL Quaternion Camera Demo";
 
-const Vector3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
+constexpr glm::vec3 CAMERA_ACCELERATION(8.0F, 8.0F, 8.0F);
 constexpr float CAMERA_FOVX = 90.0F;
-const Vector3 CAMERA_POS(0.0F, 1.0F, 0.0F);
+constexpr glm::vec3 CAMERA_POS(0.0F, 1.0F, 0.0F);
 constexpr float CAMERA_SPEED_ROTATION = 0.2F;
 constexpr float CAMERA_SPEED_FLIGHT_YAW = 100.0F;
-const Vector3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
+constexpr glm::vec3 CAMERA_VELOCITY(2.0F, 2.0F, 2.0F);
 constexpr float CAMERA_ZFAR = 100.0F;
 constexpr float CAMERA_ZNEAR = 0.1F;
 
@@ -77,8 +77,8 @@ GLuint g_floorColorMapTexture;
 GLuint g_floorLightMapTexture;
 GLuint g_floorDisplayList;
 Camera g_camera;
-Vector3 g_cameraBoundsMax;
-Vector3 g_cameraBoundsMin;
+glm::vec3 g_cameraBoundsMax;
+glm::vec3 g_cameraBoundsMin;
 float g_cameraRotationSpeed = CAMERA_SPEED_ROTATION;
 SDL_Window *g_pWindow = nullptr;
 SDL_GLContext g_glcontext = nullptr;
@@ -99,7 +99,7 @@ static GLint g_uTexture1Locaion;
 void Cleanup();
 void CleanupApp();
 float GetElapsedTimeInSeconds();
-void GetMovementDirection(Vector3 &direction);
+void GetMovementDirection(glm::vec3 &direction);
 bool Init();
 void InitApp();
 void InitGL();
@@ -221,7 +221,7 @@ float GetElapsedTimeInSeconds() {
   return static_cast<float>(elapsedTicks) / 1000.0F;
 }
 
-void GetMovementDirection(Vector3 &direction) {
+void GetMovementDirection(glm::vec3 &direction) {
   static bool moveForwardsPressed = false;
   static bool moveBackwardsPressed = false;
   static bool moveRightPressed = false;
@@ -229,10 +229,10 @@ void GetMovementDirection(Vector3 &direction) {
   static bool moveUpPressed = false;
   static bool moveDownPressed = false;
 
-  Vector3 velocity = g_camera.getCurrentVelocity();
+  glm::vec3 velocity = g_camera.getCurrentVelocity();
   Keyboard &keyboard = Keyboard::instance();
 
-  direction.set(0.0F, 0.0F, 0.0F);
+  direction = {0.0F, 0.0F, 0.0F};
 
   if(keyboard.keyDown(SDL_Scancode::SDL_SCANCODE_W)) {
     if(!moveForwardsPressed) {
@@ -331,8 +331,8 @@ void InitApp() {
   g_camera.setAcceleration(CAMERA_ACCELERATION);
   g_camera.setVelocity(CAMERA_VELOCITY);
 
-  g_cameraBoundsMax.set(FLOOR_WIDTH / 2.0F, 4.0F, FLOOR_HEIGHT / 2.0F);
-  g_cameraBoundsMin.set(-FLOOR_WIDTH / 2.0F, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0F);
+  g_cameraBoundsMax = {FLOOR_WIDTH / 2.0F, 4.0F, FLOOR_HEIGHT / 2.0F};
+  g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0F, CAMERA_POS.y, -FLOOR_HEIGHT / 2.0F};
 
   Mouse::instance().hideCursor(true);
   Mouse::instance().moveToWindowCenter();
@@ -445,8 +445,8 @@ GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, 
 void Log(const char *pszMessage) { fmt::print("{}\n", pszMessage); }
 
 void PerformCameraCollisionDetection() {
-  const Vector3 &pos = g_camera.getPosition();
-  Vector3 newPos(pos);
+  const glm::vec3 &pos = g_camera.getPosition();
+  glm::vec3 newPos(pos);
 
   if(pos.x > g_cameraBoundsMax.x) {
     newPos.x = g_cameraBoundsMax.x;
@@ -531,7 +531,7 @@ void ProcessUserInput() {
     if(g_flightModeEnabled) {
       g_camera.setBehavior(Camera::CAMERA_BEHAVIOR_FLIGHT);
     } else {
-      const Vector3 &cameraPos = g_camera.getPosition();
+      const glm::vec3 &cameraPos = g_camera.getPosition();
 
       g_camera.setBehavior(Camera::CAMERA_BEHAVIOR_FIRST_PERSON);
       g_camera.setPosition(cameraPos.x, CAMERA_POS.y, cameraPos.z);
@@ -592,8 +592,8 @@ void RenderFrame() {
   glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
   glClear(GL_COLOR_BUFFER_BIT);
 
-  const auto projection = g_camera.getProjectionMatrix().toGlm();
-  const auto view = g_camera.getViewMatrix().toGlm();
+  const auto &projection = g_camera.getProjectionMatrix();
+  const auto &view = g_camera.getViewMatrix();
   const auto MVP = projection * view;
 
   glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
@@ -667,7 +667,7 @@ void UpdateCamera(float elapsedTimeSec) {
   float heading = 0.0F;
   float pitch = 0.0F;
   float roll = 0.0F;
-  Vector3 direction;
+  glm::vec3 direction;
   Mouse &mouse = Mouse::instance();
 
   GetMovementDirection(direction);
