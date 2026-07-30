@@ -47,7 +47,7 @@ GLCamera2
 - [x] Remove jpeg from git.
 - [x] Download jpeg from google drive.
 - [x] Create precompiled header.
-- [ ] Replace `mathlib` with glm.
+- [x] Replace `mathlib` with glm.
 - [x] Adding OpenGL Debug.
 - [x] Replace `bitmap` with stb.
 - [x] Remove Multisample.
