@@ -20,241 +20,172 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-#include "Entity3D.h"
+#include "entity3d.hpp"
+
+namespace {
+// mathlib composed quaternions left to right, glm composes right to left, so
+// every mathlib 'a * b' becomes 'b * a' here.
+constexpr float FULL_CIRCLE_DEGREES = 360.0F;
+
+void wrapDegrees(glm::vec3 &angles) {
+  for(glm::length_t i = 0; i < 3; ++i) {
+    if(angles[i] > FULL_CIRCLE_DEGREES)
+      angles[i] -= FULL_CIRCLE_DEGREES;
+
+    if(angles[i] < -FULL_CIRCLE_DEGREES)
+      angles[i] += FULL_CIRCLE_DEGREES;
+  }
+}
+}  // namespace
 
 Entity3D::Entity3D() {
-    m_worldMatrix.identity();
-    m_orientation.identity();
-    m_rotation.identity();
-    
-    m_right.set(1.0f, 0.0f, 0.0f);
-    m_up.set(0.0f, 1.0f, 0.0f);
-    m_forward.set(0.0f, 0.0f, -1.0f);
-    
-    m_position.set(0.0f, 0.0f, 0.0f);
-    m_velocity.set(0.0f, 0.0f, 0.0f);
-    m_eulerOrient.set(0.0f, 0.0f, 0.0f);
-    m_eulerRotate.set(0.0f, 0.0f, 0.0f);
-    
-    m_constrainedToWorldYAxis = false;
+  m_worldMatrix = glm::mat4(1.0F);
+  m_orientation = glm::quat(1.0F, 0.0F, 0.0F, 0.0F);
+  m_rotation = glm::quat(1.0F, 0.0F, 0.0F, 0.0F);
+
+  m_right = {1.0F, 0.0F, 0.0F};
+  m_up = {0.0F, 1.0F, 0.0F};
+  m_forward = {0.0F, 0.0F, -1.0F};
+
+  m_position = {0.0F, 0.0F, 0.0F};
+  m_velocity = {0.0F, 0.0F, 0.0F};
+  m_eulerOrient = {0.0F, 0.0F, 0.0F};
+  m_eulerRotate = {0.0F, 0.0F, 0.0F};
+
+  m_constrainedToWorldYAxis = false;
 }
 
-Entity3D::~Entity3D() {}
+Entity3D::~Entity3D() = default;
 
 void Entity3D::constrainToWorldYAxis(bool constrain) {
-    // Constraining rotations to the world Y axis means that all heading
-    // changes are applied to the world Y axis rather than the entity's
-    // local Y axis.
+  // Constraining rotations to the world Y axis means that all heading
+  // changes are applied to the world Y axis rather than the entity's
+  // local Y axis.
 
-    m_constrainedToWorldYAxis = constrain;
+  m_constrainedToWorldYAxis = constrain;
 }
 
 void Entity3D::orient(float headingDegrees, float pitchDegrees, float rollDegrees) {
-    // orient() changes the direction the entity is facing. This directly
-    // affects the orientation of the entity's right, up, and forward vectors.
-    // orient() is usually called in response to the user's input if the entity
-    // is able to be moved by the user.
+  // orient() changes the direction the entity is facing. This directly
+  // affects the orientation of the entity's right, up, and forward vectors.
+  // orient() is usually called in response to the user's input if the entity
+  // is able to be moved by the user.
 
-    m_eulerOrient.x += pitchDegrees;
-    m_eulerOrient.y += headingDegrees;
-    m_eulerOrient.z += rollDegrees;
+  m_eulerOrient.x += pitchDegrees;
+  m_eulerOrient.y += headingDegrees;
+  m_eulerOrient.z += rollDegrees;
 
-    if (m_eulerOrient.x > 360.0f)
-        m_eulerOrient.x -= 360.0f;
-
-    if (m_eulerOrient.x < -360.0f)
-        m_eulerOrient.x += 360.0f;
-
-    if (m_eulerOrient.y > 360.0f)
-        m_eulerOrient.y -= 360.0f;
-
-    if (m_eulerOrient.y < -360.0f)
-        m_eulerOrient.y += 360.0f;
-
-    if (m_eulerOrient.z > 360.0f)
-        m_eulerOrient.z -= 360.0f;
-
-    if (m_eulerOrient.z < -360.0f)
-        m_eulerOrient.z += 360.0f;
+  wrapDegrees(m_eulerOrient);
 }
 
 void Entity3D::rotate(float headingDegrees, float pitchDegrees, float rollDegrees) {
-    // rotate() does not change the direction the entity is facing. This method
-    // allows the entity to freely spin around without affecting its orientation
-    // and its right, up, and forward vectors. For example, if this entity is
-    // a planet, then rotate() is used to spin the planet on its y axis. If this
-    // entity is an asteroid, then rotate() is used to tumble the asteroid as
-    // it moves in space.
+  // rotate() does not change the direction the entity is facing. This method
+  // allows the entity to freely spin around without affecting its orientation
+  // and its right, up, and forward vectors. For example, if this entity is
+  // a planet, then rotate() is used to spin the planet on its y axis. If this
+  // entity is an asteroid, then rotate() is used to tumble the asteroid as
+  // it moves in space.
 
-    m_eulerRotate.x += pitchDegrees;
-    m_eulerRotate.y += headingDegrees;
-    m_eulerRotate.z += rollDegrees;
+  m_eulerRotate.x += pitchDegrees;
+  m_eulerRotate.y += headingDegrees;
+  m_eulerRotate.z += rollDegrees;
 
-    if (m_eulerRotate.x > 360.0f)
-        m_eulerRotate.x -= 360.0f;
-
-    if (m_eulerRotate.x < -360.0f)
-        m_eulerRotate.x += 360.0f;
-
-    if (m_eulerRotate.y > 360.0f)
-        m_eulerRotate.y -= 360.0f;
-
-    if (m_eulerRotate.y < -360.0f)
-        m_eulerRotate.y += 360.0f;
-
-    if (m_eulerRotate.z > 360.0f)
-        m_eulerRotate.z -= 360.0f;
-
-    if (m_eulerRotate.z < -360.0f)
-        m_eulerRotate.z += 360.0f;
+  wrapDegrees(m_eulerRotate);
 }
 
-const Vector3 &Entity3D::getForwardVector() const {
-    return m_forward;
-}
+void Entity3D::setPosition(float x, float y, float z) { m_position = {x, y, z}; }
 
-const Vector3 &Entity3D::getPosition() const {
-    return m_position;
-}
+void Entity3D::setVelocity(float x, float y, float z) { m_velocity = {x, y, z}; }
 
-const Vector3 &Entity3D::getRightVector() const {
-    return m_right;
-}
-
-const Vector3 &Entity3D::getUpVector() const {
-    return m_up;
-}
-
-const Vector3 &Entity3D::getVelocity() const {
-    return m_velocity;
-}
-
-const Matrix4 &Entity3D::getWorldMatrix() const {
-    return m_worldMatrix;
-}
-
-void Entity3D::setPosition(float x, float y, float z) {
-    m_position.set(x, y, z);
-}
-
-void Entity3D::setVelocity(float x, float y, float z) {
-    m_velocity.set(x, y, z);
-}
-
-void Entity3D::setWorldMatrix(const Matrix4 &worldMatrix) {
-    m_worldMatrix = worldMatrix;
-    m_orientation.fromMatrix(worldMatrix);
-    m_position.set(worldMatrix[3][0], worldMatrix[3][1], worldMatrix[3][2]);
-    extractAxes();
+void Entity3D::setWorldMatrix(const glm::mat4 &worldMatrix) {
+  m_worldMatrix = worldMatrix;
+  m_orientation = glm::quat_cast(worldMatrix);
+  m_position = {worldMatrix[3][0], worldMatrix[3][1], worldMatrix[3][2]};
+  extractAxes();
 }
 
 void Entity3D::update(float elapsedTimeSec) {
-    Vector3 velocityElapsed, eulerOrientElapsed, eulerRotateElapsed;
-    Vector3 oldPos, heading;
-    Quaternion temp;
+  const glm::vec3 velocityElapsed = m_velocity * elapsedTimeSec;
+  const glm::vec3 eulerOrientElapsed = m_eulerOrient * elapsedTimeSec;
+  const glm::vec3 eulerRotateElapsed = m_eulerRotate * elapsedTimeSec;
 
-    velocityElapsed    = m_velocity    * elapsedTimeSec;
-    eulerOrientElapsed = m_eulerOrient * elapsedTimeSec;
-    eulerRotateElapsed = m_eulerRotate * elapsedTimeSec;
+  // Update the entity's position.
 
-    // Update the entity's position.
-    
-    extractAxes();
+  extractAxes();
 
-    oldPos = m_position;
+  const glm::vec3 oldPos = m_position;
 
-    m_position += m_right   * velocityElapsed.x;
-    m_position += m_up      * velocityElapsed.y;
-    m_position += m_forward * velocityElapsed.z;
+  m_position += m_right * velocityElapsed.x;
+  m_position += m_up * velocityElapsed.y;
+  m_position += m_forward * velocityElapsed.z;
 
-    heading = m_position - oldPos;
-    heading.normalize();
+  // Guard the normalize: a stationary entity has a zero length heading, and
+  // glm::normalize() would turn that into NaNs.
+  const glm::vec3 displacement = m_position - oldPos;
+  const glm::vec3 heading = (glm::dot(displacement, displacement) > 0.0F) ? glm::normalize(displacement) : glm::vec3(0.0F);
 
-    // Update the entity's orientation.
-    
-    temp = eulerToQuaternion(m_orientation.toMatrix4(), eulerOrientElapsed.y,
-            eulerOrientElapsed.x, eulerOrientElapsed.z);
-    
-    // When moving backwards invert rotations to match direction of travel.
-    if (Vector3::dot(heading, m_forward) < 0.0f)
-        temp = temp.inverse();
+  // Update the entity's orientation.
 
-    m_orientation *= temp;
-    m_orientation.normalize();
+  glm::quat temp = eulerToQuaternion(glm::mat4_cast(m_orientation), eulerOrientElapsed.y, eulerOrientElapsed.x, eulerOrientElapsed.z);
 
-    // Update the entity's free rotation.
+  // When moving backwards invert rotations to match direction of travel.
+  if(glm::dot(heading, m_forward) < 0.0F)
+    temp = glm::inverse(temp);
 
-    temp = eulerToQuaternion(m_rotation.toMatrix4(), eulerRotateElapsed.y,
-            eulerRotateElapsed.x, eulerRotateElapsed.z);
-    
-    m_rotation *= temp;
-    m_rotation.normalize();
+  m_orientation = glm::normalize(temp * m_orientation);
 
-    // Update the entity's world matrix.
+  // Update the entity's free rotation.
 
-    temp = m_rotation * m_orientation;
-    temp.normalize();
+  temp = eulerToQuaternion(glm::mat4_cast(m_rotation), eulerRotateElapsed.y, eulerRotateElapsed.x, eulerRotateElapsed.z);
 
-    m_worldMatrix = temp.toMatrix4();
-    m_worldMatrix[3][0] = m_position.x;
-    m_worldMatrix[3][1] = m_position.y;
-    m_worldMatrix[3][2] = m_position.z;
+  m_rotation = glm::normalize(temp * m_rotation);
 
-    // Clear the entity's cached euler rotations and velocity for this frame.
+  // Update the entity's world matrix.
 
-    m_velocity.set(0.0f, 0.0f, 0.0f);
-    m_eulerOrient.set(0.0f, 0.0f, 0.0f);
-    m_eulerRotate.set(0.0f, 0.0f, 0.0f);
+  const glm::quat worldOrientation = glm::normalize(m_orientation * m_rotation);
+
+  m_worldMatrix = glm::mat4_cast(worldOrientation);
+  m_worldMatrix[3][0] = m_position.x;
+  m_worldMatrix[3][1] = m_position.y;
+  m_worldMatrix[3][2] = m_position.z;
+
+  // Clear the entity's cached euler rotations and velocity for this frame.
+
+  m_velocity = {0.0F, 0.0F, 0.0F};
+  m_eulerOrient = {0.0F, 0.0F, 0.0F};
+  m_eulerRotate = {0.0F, 0.0F, 0.0F};
 }
 
-Quaternion Entity3D::eulerToQuaternion(const Matrix4 &m, float headingDegrees,
-                                       float pitchDegrees, float rollDegrees) const
-{
-    // Construct a quaternion from an euler transformation. We do this rather
-    // than use Quaternion::fromHeadPitchRoll() to support constraining heading
-    // changes to the world Y axis.
+glm::quat Entity3D::eulerToQuaternion(const glm::mat4 &m, float headingDegrees, float pitchDegrees, float rollDegrees) const {
+  // Construct a quaternion from an euler transformation. We do this rather
+  // than use a heading-pitch-roll helper to support constraining heading
+  // changes to the world Y axis.
 
-    Quaternion result = Quaternion::IDENTITY;
-    Quaternion rotation = Quaternion::IDENTITY;
-    Vector3 localXAxis(m[0][0], m[0][1], m[0][2]);
-    Vector3 localYAxis(m[1][0], m[1][1], m[1][2]);
-    Vector3 localZAxis(m[2][0], m[2][1], m[2][2]);   
+  glm::quat result = glm::quat(1.0F, 0.0F, 0.0F, 0.0F);
+  const glm::vec3 localXAxis = {m[0][0], m[0][1], m[0][2]};
+  const glm::vec3 localYAxis = {m[1][0], m[1][1], m[1][2]};
+  const glm::vec3 localZAxis = {m[2][0], m[2][1], m[2][2]};
 
-    if (headingDegrees != 0.0f)
-    {
-        if (m_constrainedToWorldYAxis)
-            rotation.fromAxisAngle(Vector3(0.0f, 1.0f, 0.0f), headingDegrees);
-        else
-            rotation.fromAxisAngle(localYAxis, headingDegrees);
+  if(headingDegrees != 0.0F) {
+    const glm::vec3 axis = m_constrainedToWorldYAxis ? glm::vec3(0.0F, 1.0F, 0.0F) : localYAxis;
+    result = glm::angleAxis(glm::radians(headingDegrees), axis) * result;
+  }
 
-        result *= rotation;
-    }
+  if(pitchDegrees != 0.0F) {
+    result = glm::angleAxis(glm::radians(pitchDegrees), localXAxis) * result;
+  }
 
-    if (pitchDegrees != 0.0f)
-    {
-        rotation.fromAxisAngle(localXAxis, pitchDegrees);
-        result *= rotation;
-    }
+  if(rollDegrees != 0.0F) {
+    result = glm::angleAxis(glm::radians(rollDegrees), localZAxis) * result;
+  }
 
-    if (rollDegrees != 0.0f)
-    {
-        rotation.fromAxisAngle(localZAxis, rollDegrees);
-        result *= rotation;
-    }
-
-    return result;
+  return result;
 }
 
-void Entity3D::extractAxes()
-{
-    Matrix4 m = m_orientation.toMatrix4();
+void Entity3D::extractAxes() {
+  const glm::mat4 m = glm::mat4_cast(m_orientation);
 
-    m_right.set(m[0][0], m[0][1], m[0][2]);
-    m_right.normalize();
-    
-    m_up.set(m[1][0], m[1][1], m[1][2]);
-    m_up.normalize();
-    
-    m_forward.set(-m[2][0], -m[2][1], -m[2][2]);
-    m_forward.normalize();
+  m_right = glm::normalize(glm::vec3(m[0][0], m[0][1], m[0][2]));
+  m_up = glm::normalize(glm::vec3(m[1][0], m[1][1], m[1][2]));
+  m_forward = glm::normalize(glm::vec3(-m[2][0], -m[2][1], -m[2][2]));
 }

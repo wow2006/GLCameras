@@ -92,6 +92,28 @@ GLCamera3
 GLThirdPersonCamera1
 --------------------
 
+- [x] Adding `GLThirdPersonCamera1` to cmake.
+- [x] Delete legacy files (mathlib, bitmap, gl_font, input, GL_ARB_multitexture, WGL_ARB_multisample).
+- [x] Replace `mathlib` with glm. `NOTE: quaternion multiply order is reversed vs mathlib`
+- [x] Replace `bitmap` with stb.
+- [x] Replace `gl_font` with ImGui.
+- [x] Remove Multisample.
+- [x] Remove Multitexture.
+- [x] Adding Support for glbinding.
+- [x] Port OpenGL 1.0 to OpenGL 4.6.
+- [x] Use DSA for OpenGL Functions.
+- [x] Replace Default Uniform buffer with UBO.
+- [x] Adding Imgui support.
+- [x] Port win32 to SDL2.
+- [x] Port `ThirdPersonCamera` (offset-vector chase camera).
+- [x] Port `Entity3D` (the rolling ball).
+- [x] Replace `gluSphere` with a generated UV sphere mesh (poles on z, as GLU had them).
+- [x] Add to the CI clang-format sweep.
+- [x] Floor winding. `NOTE: the {3,1,0, 3,2,1} indices shared with the other demos are`
+      `back-facing from above; they only survive there because GLCamera1/2 do not cull.`
+- [ ] Missing ToggleFullscreen.
+- [ ] Missing `{Keyboard,Mouse}::handleMsg` in Input header.
+
 GLThirdPersonCamera2
 --------------------
 
