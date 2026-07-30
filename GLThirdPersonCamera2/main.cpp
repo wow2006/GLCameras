@@ -43,939 +43,931 @@
 // large stiffness values will negate the spring damping effect on the camera.
 //
 //-----------------------------------------------------------------------------
-
-#if !defined(WIN32_LEAN_AND_MEAN)
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <windows.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <cmath>
-#include <fstream>
-#include <iomanip>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-
-#if defined(_DEBUG)
-#include <crtdbg.h>
-#endif
-
-#include "GL_ARB_multitexture.h"
-#include "WGL_ARB_multisample.h"
-#include "bitmap.h"
-#include "entity3d.h"
-#include "gl_font.h"
-#include "input.h"
-#include "mathlib.h"
-#include "third_person_camera.h"
+// STL
+#include <algorithm>
+// stb
+#include <stb_image.h>
+// SDL2
+#include <SDL2/SDL.h>
+//
+#include "entity3d.hpp"
+#include "input.hpp"
+#include "shaders.hpp"
+#include "third_person_camera.hpp"
 
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
 
-#define APP_TITLE "OpenGL Third Person Camera Demo 2"
+namespace {
+constexpr auto APP_TITLE = "OpenGL Third Person Camera Demo 2";
 
-// Windows Vista compositing support.
-#if !defined(PFD_SUPPORT_COMPOSITION)
-#define PFD_SUPPORT_COMPOSITION 0x00008000
-#endif
+constexpr float PI = 3.14159265358979323846F;
 
-// GL_EXT_texture_filter_anisotropic
-#define GL_TEXTURE_MAX_ANISOTROPY_EXT     0x84FE
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+constexpr float BALL_FORWARD_SPEED = 120.0F;
+constexpr float BALL_HEADING_SPEED = 120.0F;
+constexpr float BALL_ROLLING_SPEED = 280.0F;
+constexpr float BALL_RADIUS = 20.0F;
+constexpr int BALL_STACKS = 18;
+constexpr int BALL_SLICES = 18;
 
-const float BALL_FORWARD_SPEED = 120.0f;
-const float BALL_HEADING_SPEED = 120.0f;
-const float BALL_ROLLING_SPEED = 280.0f;
-const float BALL_RADIUS = 20.0f;
-const int   BALL_STACKS = 18;
-const int   BALL_SLICES = 18;
+constexpr float FLOOR_WIDTH = 1024.0F;
+constexpr float FLOOR_HEIGHT = 1024.0F;
+constexpr float FLOOR_TILE_S = 4.0F;
+constexpr float FLOOR_TILE_T = 4.0F;
 
-const float FLOOR_WIDTH = 1024.0f;
-const float FLOOR_HEIGHT = 1024.0f;
-const float FLOOR_TILE_S = 4.0f;
-const float FLOOR_TILE_T = 4.0f;
+constexpr float CAMERA_FOVX = 80.0F;
+constexpr float CAMERA_ZFAR = FLOOR_WIDTH * 2.0F;
+constexpr float CAMERA_ZNEAR = 1.0F;
+constexpr float CAMERA_MAX_SPRING_CONSTANT = 100.0F;
+constexpr float CAMERA_MIN_SPRING_CONSTANT = 1.0F;
+constexpr float CAMERA_SPRING_STEP = 0.1F;
 
-const float CAMERA_FOVX = 80.0f;
-const float CAMERA_ZFAR = FLOOR_WIDTH * 2.0f;
-const float CAMERA_ZNEAR = 1.0f;
-const float CAMERA_MAX_SPRING_CONSTANT = 100.0f;
-const float CAMERA_MIN_SPRING_CONSTANT = 1.0f;
+constexpr uint32_t MATRICES_BINDING_POINT = 0;
+
+struct BallVertex {
+  glm::vec3 position;
+  glm::vec3 normal;
+  glm::vec2 texCoord;
+};
+}  // namespace
 
 //-----------------------------------------------------------------------------
 // Globals.
 //-----------------------------------------------------------------------------
 
-HWND                g_hWnd;
-HDC                 g_hDC;
-HGLRC               g_hRC;
-HINSTANCE           g_hInstance;
-int                 g_framesPerSecond;
-int                 g_windowWidth;
-int                 g_windowHeight;
-int                 g_msaaSamples;
-int                 g_maxAnisotrophy;
-GLuint              g_ballColorMapTexture;
-GLuint              g_floorColorMapTexture;
-GLuint              g_floorLightMapTexture;
-GLuint              g_floorDisplayList;
-bool                g_isFullScreen;
-bool                g_hasFocus;
-bool                g_enableVerticalSync;
-bool                g_displayHelp;
-GLUquadricObj      *g_pQuadricObj;
-GLFont              g_font;
-ThirdPersonCamera   g_camera;
-Entity3D            g_ball;
+int g_framesPerSecond;
+glm::ivec2 g_windowResolution;
+int g_msaaSamples;
+int g_maxAnisotrophy;
+bool g_isFullScreen;
+bool g_hasFocus;
+bool g_enableVerticalSync;
+bool g_displayHelp;
+GLuint g_ballColorMapTexture;
+GLuint g_floorColorMapTexture;
+GLuint g_floorLightMapTexture;
+ThirdPersonCamera g_camera;
+Entity3D g_ball;
+SDL_Window *g_pWindow = nullptr;
+SDL_GLContext g_glcontext = nullptr;
+
+GLuint g_UBO = 0;
+
+GLuint g_floorVAO = 0;
+GLuint g_floorVBO = 0;
+GLuint g_floorEBO = 0;
+GLuint g_floorProgram = 0;
+
+GLint g_uFloorTexture0Location;
+GLint g_uFloorTexture1Location;
+
+GLuint g_ballVAO = 0;
+GLuint g_ballVBO = 0;
+GLuint g_ballEBO = 0;
+GLuint g_ballProgram = 0;
+GLsizei g_ballIndexCount = 0;
+
+GLint g_uBallTextureLocation;
+GLint g_uBallNormalMatrixLocation;
+GLint g_uBallLightDirLocation;
 
 //-----------------------------------------------------------------------------
 // Functions Prototypes.
 //-----------------------------------------------------------------------------
 
-void    Cleanup();
-void    CleanupApp();
-float   ClipBallToFloor(const Entity3D &ball, float forwardSpeed, float elapsedTimeSec);
-HWND    CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
-void    EnableVerticalSync(bool enableVerticalSync);
-bool    ExtensionSupported(const char *pszExtensionName);
-float   GetElapsedTimeInSeconds();
-bool    Init();
-void    InitApp();
-void    InitGL();
-GLuint  LoadTexture(const char *pszFilename);
-GLuint  LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
-                    GLint wrapS, GLint wrapT);
-void    Log(const char *pszMessage);
-void    ProcessUserInput();
-void    RenderBall();
-void    RenderFloor();
-void    RenderFrame();
-void    RenderText();
-void    SetProcessorAffinity();
-void    ToggleFullScreen();
-void    UpdateBall(float elapsedTimeSec);
-void    UpdateFrame(float elapsedTimeSec);
-void    UpdateFrameRate(float elapsedTimeSec);
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void Cleanup();
+void CleanupApp();
+float ClipBallToFloor(const Entity3D &ball, float forwardSpeed, float elapsedTimeSec);
+float GetElapsedTimeInSeconds();
+bool Init();
+void InitApp();
+void InitCamera();
+void InitGL();
+void InitImgui();
+GLuint LoadTexture(const char *pszFilename);
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT);
+void Log(const char *pszMessage);
+void ProcessUserInput();
+void RenderBall();
+void RenderFloor();
+void RenderFrame();
+void RenderText();
+void ToggleFullScreen();
+void UpdateBall(float elapsedTimeSec);
+void UpdateFrame(float elapsedTimeSec);
+void UpdateFrameRate(float elapsedTimeSec);
+void createBallBuffers();
+void createFloorBuffers();
+void createUniformBuffers();
+void createBallProgram();
+void createFloorProgram();
 
 //-----------------------------------------------------------------------------
 // Functions.
 //-----------------------------------------------------------------------------
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
-{
-#if defined _DEBUG
-    _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
+#if defined(_WIN32) && defined(_DEBUG)
+  _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
+  _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+#endif
+  if(0 != SDL_Init(SDL_INIT_VIDEO)) {
+    fmt::print(stderr, fg(fmt::color::red), "ERROR: Can not initailize SDL: {}\n", SDL_GetError());
+    return EXIT_FAILURE;
+  }
+
+  SDL_DisplayMode mode{};
+  if(0 == SDL_GetDisplayMode(0, 0, &mode)) {
+    g_windowResolution = {mode.w / 2, mode.h / 2};
+  } else {
+    g_windowResolution = {800, 600};
+  }
+
+  // Unlike the first person demos this camera is driven entirely by the ball,
+  // so the mouse is left alone: no grabbing, no recentering, cursor visible.
+  constexpr auto flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+  g_pWindow = SDL_CreateWindow(APP_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, g_windowResolution.x, g_windowResolution.y, flags);
+  if(nullptr == g_pWindow) {
+    fmt::print(stderr, fg(fmt::color::red), "ERROR: Can not create SDL Window\n");
+    return EXIT_FAILURE;
+  }
+
+  SDL_SetThreadPriority(SDL_THREAD_PRIORITY_TIME_CRITICAL);
+
+  if(Init()) {
+    bool bRunning = true;
+    while(bRunning) {
+      SDL_Event event;
+      while(SDL_PollEvent(&event)) {
+        if(SDL_QUIT == event.type) {
+          bRunning = false;
+        }
+        if(SDL_KEYDOWN == event.type) {
+          if(SDL_SCANCODE_ESCAPE == event.key.keysym.scancode) {
+            bRunning = false;
+          }
+        }
+        if(SDL_WINDOWEVENT == event.type) {
+          const auto windowEvent = event.window;
+          switch(windowEvent.event) {
+          case SDL_WINDOWEVENT_RESIZED:
+            g_windowResolution = {static_cast<int>(windowEvent.data1), static_cast<int>(windowEvent.data2)};
+            g_camera.perspective(
+              CAMERA_FOVX, static_cast<float>(g_windowResolution.x) / static_cast<float>(g_windowResolution.y), CAMERA_ZNEAR, CAMERA_ZFAR);
+            break;
+          case SDL_WINDOWEVENT_CLOSE: bRunning = false; break;
+          case SDL_WINDOWEVENT_ENTER:
+          case SDL_WINDOWEVENT_FOCUS_GAINED: g_hasFocus = true; break;
+          case SDL_WINDOWEVENT_LEAVE:
+          case SDL_WINDOWEVENT_FOCUS_LOST: g_hasFocus = false; break;
+          }
+        }
+      }
+
+      UpdateFrame(GetElapsedTimeInSeconds());
+      RenderFrame();
+      SDL_GL_SwapWindow(g_pWindow);
+    }
+  }
+  Cleanup();
+  SDL_Quit();
+  return EXIT_SUCCESS;
+}
+
+float ClipBallToFloor(const Entity3D &ball, float forwardSpeed, float elapsedTimeSec) {
+  // Perform very simple collision detection to prevent the ball from
+  // moving beyond the edges of the floor. Notice that we are predicting
+  // whether the ball will move beyond the edges of the floor based on the
+  // ball's current forward velocity and the amount of time that has elapsed.
+
+  const float floorBoundaryZ = FLOOR_HEIGHT * 0.5F - BALL_RADIUS;
+  const float floorBoundaryX = FLOOR_WIDTH * 0.5F - BALL_RADIUS;
+  const float velocity = forwardSpeed * elapsedTimeSec;
+  const glm::vec3 newBallPos = ball.getPosition() + ball.getForwardVector() * velocity;
+
+  if(newBallPos.z > -floorBoundaryZ && newBallPos.z < floorBoundaryZ) {
+    if(newBallPos.x > -floorBoundaryX && newBallPos.x < floorBoundaryX)
+      return forwardSpeed;  // ball will still be within floor's bounds
+  }
+
+  return 0.0F;  // ball will be outside of floor's bounds...so stop the ball
+}
+
+float GetElapsedTimeInSeconds() {
+  static uint64_t lastTick = 0;
+  uint64_t currentTick = SDL_GetTicks64();
+
+  if(lastTick == 0) {
+    lastTick = currentTick;
+    return 0.0F;
+  }
+
+  uint64_t elapsedTicks = currentTick - lastTick;
+  lastTick = currentTick;
+
+  return static_cast<float>(elapsedTicks) / 1000.0F;
+}
+
+bool Init() {
+  try {
+    InitGL();
+    InitApp();
+  } catch(const std::exception &e) {
+    const auto errorMessage = fmt::format("Application initialization failed!\n\n{}", e.what());
+    Log(errorMessage.c_str());
+    return false;
+  }
+  return true;
+}
+
+void InitApp() {
+  if(!(g_ballColorMapTexture = LoadTexture("ball_color_map.jpg"))) {
+    throw std::runtime_error("Failed to load texture: ball_color_map.jpg");
+  }
+
+  if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg"))) {
+    throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
+  }
+
+  if(!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg"))) {
+    throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
+  }
+
+  // Initialize the ball.
+  g_ball.constrainToWorldYAxis(true);
+  g_ball.setPosition(0.0F, 1.0F + BALL_RADIUS, 0.0F);
+
+  InitCamera();
+
+  createUniformBuffers();
+  createFloorBuffers();
+  createFloorProgram();
+  createBallBuffers();
+  createBallProgram();
+}
+
+void InitCamera() {
+  g_camera.perspective(CAMERA_FOVX, static_cast<float>(g_windowResolution.x) / static_cast<float>(g_windowResolution.y), CAMERA_ZNEAR, CAMERA_ZFAR);
+
+  g_camera.lookAt({0.0F, BALL_RADIUS * 3.0F, BALL_RADIUS * 7.0F}, {0.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F});
+}
+
+void InitGL() {
+  if(SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8) < 0) {
+    Log("Failed to set the Red size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8) < 0) {
+    Log("Failed to set the green size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8) < 0) {
+    Log("Failed to set the blue size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, 32) < 0) {
+    Log("Failed to set the buffer size to 32");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16) < 0) {
+    Log("Failed to set the Depth size to 16");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1) < 0) {
+    Log("Failed to set the DoubleBuffer");
+  }
+
+#ifdef OPENGL_DEBUG
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG) < 0) {
+    Log("Failed to set OpenGL debug flag");
+  }
+#endif
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE) < 0) {
+    Log("Failed to set core context");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0) {
+    Log("Failed to set major version to 4");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6) < 0) {
+    Log("Failed to set minor version to 6");
+  }
+
+  g_glcontext = SDL_GL_CreateContext(g_pWindow);
+  if(nullptr == g_glcontext) {
+    throw std::runtime_error("Failed to create OpenGL Context");
+  }
+  SDL_GL_MakeCurrent(g_pWindow, g_glcontext);
+
+  SDL_GL_SetSwapInterval(1);
+  g_enableVerticalSync = true;
+
+  glbinding::initialize([](const char *name) { return reinterpret_cast<glbinding::ProcAddress>(SDL_GL_GetProcAddress(name)); });
+
+#ifdef OPENGL_DEBUG
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback(
+    [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {}, nullptr);
 #endif
 
-    MSG msg = {0};
-    WNDCLASSEX wcl = {0};
+  glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
 
-    wcl.cbSize = sizeof(wcl);
-    wcl.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-    wcl.lpfnWndProc = WindowProc;
-    wcl.cbClsExtra = 0;
-    wcl.cbWndExtra = 0;
-    wcl.hInstance = g_hInstance = hInstance;
-    wcl.hIcon = LoadIcon(0, IDI_APPLICATION);
-    wcl.hCursor = LoadCursor(0, IDC_ARROW);
-    wcl.hbrBackground = 0;
-    wcl.lpszMenuName = 0;
-    wcl.lpszClassName = "GLWindowClass";
-    wcl.hIconSm = 0;
-
-    if (!RegisterClassEx(&wcl))
-        return 0;
-
-    g_hWnd = CreateAppWindow(wcl, APP_TITLE);
-
-    if (g_hWnd)
-    {
-        SetProcessorAffinity();
-
-        if (Init())
-        {
-            ShowWindow(g_hWnd, nShowCmd);
-            UpdateWindow(g_hWnd);
-
-            while (true)
-            {
-                while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
-                {
-                    if (msg.message == WM_QUIT)
-                        break;
-
-                    TranslateMessage(&msg);
-                    DispatchMessage(&msg);
-                }
-
-                if (msg.message == WM_QUIT)
-                    break;
-
-                if (g_hasFocus)
-                {
-                    UpdateFrame(GetElapsedTimeInSeconds());
-                    RenderFrame();
-                    SwapBuffers(g_hDC);
-                }
-                else
-                {
-                    WaitMessage();
-                }
-            }
-        }
-
-        Cleanup();
-        UnregisterClass(wcl.lpszClassName, hInstance);
-    }
-
-    return static_cast<int>(msg.wParam);
+  InitImgui();
 }
 
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    switch (msg)
-    {
-    case WM_ACTIVATE:
-        switch (wParam)
-        {
-        default:
-            break;
-
-        case WA_ACTIVE:
-        case WA_CLICKACTIVE:
-            g_hasFocus = true;
-            break;
-
-        case WA_INACTIVE:
-            if (g_isFullScreen)
-                ShowWindow(hWnd, SW_MINIMIZE);
-            g_hasFocus = false;
-            break;
-        }
-        break;
-
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-
-    case WM_SIZE:
-        g_windowWidth = static_cast<int>(LOWORD(lParam));
-        g_windowHeight = static_cast<int>(HIWORD(lParam));
-        break;
-
-    default:
-        Keyboard::instance().handleMsg(hWnd, msg, wParam, lParam);
-        break;
-    }
-
-    return DefWindowProc(hWnd, msg, wParam, lParam);
+void InitImgui() {
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+  ImGui_ImplSDL2_InitForOpenGL(g_pWindow, g_glcontext);
+  ImGui_ImplOpenGL3_Init();
 }
 
-void Cleanup()
-{
-    CleanupApp();
-
-    if (g_hDC)
-    {
-        if (g_hRC)
-        {
-            wglMakeCurrent(g_hDC, 0);
-            wglDeleteContext(g_hRC);
-            g_hRC = 0;
-        }
-
-        ReleaseDC(g_hWnd, g_hDC);
-        g_hDC = 0;
-    }
+GLuint LoadTexture(const char *pszFilename) {
+  return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_REPEAT);
 }
 
-void CleanupApp()
-{
-    g_font.destroy();
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT) {
+  GLuint id = 0;
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  stbi_set_flip_vertically_on_load(1);
+  void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
-    if (g_floorLightMapTexture)
-    {
-        glDeleteTextures(1, &g_floorLightMapTexture);
-        g_floorLightMapTexture = 0;
-    }
+  if(pImage != nullptr) {
+    glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-    if (g_floorColorMapTexture)
-    {
-        glDeleteTextures(1, &g_floorColorMapTexture);
-        g_floorColorMapTexture = 0;
-    }
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, magFilter);
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, wrapS);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, wrapT);
 
-    if (g_ballColorMapTexture)
-    {
-        glDeleteTextures(1, &g_ballColorMapTexture);
-        g_ballColorMapTexture = 0;
+    glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+    glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+    if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
+      glGenerateTextureMipmap(id);
     }
+    glTextureParameteri(id, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
 
-    if (g_floorDisplayList)
-    {
-        glDeleteLists(g_floorDisplayList, 1);
-        g_floorDisplayList = 0;
-    }
+    stbi_image_free(pImage);
+  }
 
-    if (g_pQuadricObj)
-    {
-        gluDeleteQuadric(g_pQuadricObj);
-        g_pQuadricObj = 0;
-    }
+  return id;
 }
 
-float ClipBallToFloor(const Entity3D &ball, float forwardSpeed, float elapsedTimeSec)
-{
-    // Perform very simple collision detection to prevent the ball from
-    // moving beyond the edges of the floor. Notice that we are predicting
-    // whether the ball will move beyond the edges of the floor based on the
-    // ball's current forward velocity and the amount of time that has elapsed.
+void Log(const char *pszMessage) { fmt::print("{}\n", pszMessage); }
 
-    float floorBoundaryZ = FLOOR_HEIGHT * 0.5f - BALL_RADIUS;
-    float floorBoundaryX = FLOOR_WIDTH * 0.5f - BALL_RADIUS;
-    float velocity = forwardSpeed * elapsedTimeSec;
-    Vector3 newBallPos = ball.getPosition() + ball.getForwardVector() * velocity;
+void ProcessUserInput() {
+  Keyboard &keyboard = Keyboard::instance();
 
-    if (newBallPos.z > -floorBoundaryZ && newBallPos.z < floorBoundaryZ)
-    {
-        if (newBallPos.x > -floorBoundaryX && newBallPos.x < floorBoundaryX)
-            return forwardSpeed; // ball will still be within floor's bounds
-    }
+  if(keyboard.keyDown(SDL_SCANCODE_LALT) || keyboard.keyDown(SDL_SCANCODE_RALT)) {
+    if(keyboard.keyPressed(SDL_SCANCODE_RETURN))
+      ToggleFullScreen();
+  }
 
-    return 0.0f; // ball will be outside of floor's bounds...so stop the ball
+  if(keyboard.keyPressed(SDL_SCANCODE_H))
+    g_displayHelp = !g_displayHelp;
+
+  if(keyboard.keyPressed(SDL_SCANCODE_V)) {
+    g_enableVerticalSync = !g_enableVerticalSync;
+    SDL_GL_SetSwapInterval(g_enableVerticalSync ? 1 : 0);
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_SPACE))
+    g_camera.enableSpringSystem(!g_camera.springSystemIsEnabled());
+
+  if(keyboard.keyPressed(SDL_SCANCODE_EQUALS) || keyboard.keyPressed(SDL_SCANCODE_KP_PLUS)) {
+    const float springConstant = std::min(CAMERA_MAX_SPRING_CONSTANT, g_camera.getSpringConstant() + CAMERA_SPRING_STEP);
+    g_camera.setSpringConstant(springConstant);
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_MINUS) || keyboard.keyPressed(SDL_SCANCODE_KP_MINUS)) {
+    const float springConstant = std::max(CAMERA_MIN_SPRING_CONSTANT, g_camera.getSpringConstant() - CAMERA_SPRING_STEP);
+    g_camera.setSpringConstant(springConstant);
+  }
 }
 
-HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle)
-{
-    // Create a window that is centered on the desktop. It's exactly 1/4 the
-    // size of the desktop. Don't allow it to be resized.
+void RenderBall() {
+  glUseProgram(g_ballProgram);
 
-    DWORD wndExStyle = WS_EX_OVERLAPPEDWINDOW;
-    DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-                     WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+  const glm::mat4 &worldMatrix = g_ball.getWorldMatrix();
 
-    HWND hWnd = CreateWindowEx(wndExStyle, wcl.lpszClassName, pszTitle,
-                    wndStyle, 0, 0, 0, 0, 0, 0, wcl.hInstance, 0);
+  const auto ballMVP = g_camera.getProjectionMatrix() * g_camera.getViewMatrix() * worldMatrix;
 
-    if (hWnd)
-    {
-        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        int halfScreenWidth = screenWidth / 2;
-        int halfScreenHeight = screenHeight / 2;
-        int left = (screenWidth - halfScreenWidth) / 2;
-        int top = (screenHeight - halfScreenHeight) / 2;
-        RECT rc = {0};
+  glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
+  glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(ballMVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-        SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
-        AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
-        MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
+  const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
+  glUniformMatrix3fv(g_uBallNormalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 
-        GetClientRect(hWnd, &rc);
-        g_windowWidth = rc.right - rc.left;
-        g_windowHeight = rc.bottom - rc.top;
-    }
+  // The original demo parked GL_LIGHT0 on the camera's z axis with w = 0, which
+  // is a directional headlight rather than a positional light.
+  const glm::vec3 &lightDir = g_camera.getZAxis();
+  glUniform3f(g_uBallLightDirLocation, lightDir.x, lightDir.y, lightDir.z);
 
-    return hWnd;
+  constexpr auto BallTextureId = 0;
+  glBindTextureUnit(BallTextureId, g_ballColorMapTexture);
+  glUniform1i(g_uBallTextureLocation, BallTextureId);
+
+  glBindVertexArray(g_ballVAO);
+  glDrawElements(GL_TRIANGLES, g_ballIndexCount, GL_UNSIGNED_SHORT, nullptr);
 }
 
-void EnableVerticalSync(bool enableVerticalSync)
-{
-    // WGL_EXT_swap_control.
+void RenderFloor() {
+  glUseProgram(g_floorProgram);
 
-    typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
+  const auto floorMVP = g_camera.getProjectionMatrix() * g_camera.getViewMatrix();
 
-    static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
-        reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(
-        wglGetProcAddress("wglSwapIntervalEXT"));
+  glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
+  glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(floorMVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-    if (wglSwapIntervalEXT)
-    {
-        wglSwapIntervalEXT(enableVerticalSync ? 1 : 0);
-        g_enableVerticalSync = enableVerticalSync;
-    }
+  constexpr auto FloorTextureId = 0;
+  glBindTextureUnit(FloorTextureId, g_floorColorMapTexture);
+  glUniform1i(g_uFloorTexture0Location, FloorTextureId);
+
+  constexpr auto FloorLightTextureId = 1;
+  glBindTextureUnit(FloorLightTextureId, g_floorLightMapTexture);
+  glUniform1i(g_uFloorTexture1Location, FloorLightTextureId);
+
+  glBindVertexArray(g_floorVAO);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
 }
 
-bool ExtensionSupported(const char *pszExtensionName)
-{
-    static const char *pszGLExtensions = 0;
-    static const char *pszWGLExtensions = 0;
+void RenderFrame() {
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL2_NewFrame(g_pWindow);
+  ImGui::NewFrame();
 
-    if (!pszGLExtensions)
-        pszGLExtensions = reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS));
+  { RenderText(); }
+  ImGui::Render();
 
-    if (!pszWGLExtensions)
-    {
-        // WGL_ARB_extensions_string.
+  glViewport(0, 0, g_windowResolution.x, g_windowResolution.y);
+  glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
 
-        PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB =
-            reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(
-            wglGetProcAddress("wglGetExtensionsStringARB"));
+  RenderBall();
+  RenderFloor();
 
-        if (wglGetExtensionsStringARB)
-            pszWGLExtensions = wglGetExtensionsStringARB(wglGetCurrentDC());
-    }
-
-    if (!strstr(pszGLExtensions, pszExtensionName))
-    {
-        if (!strstr(pszWGLExtensions, pszExtensionName))
-            return false;
-    }
-
-    return true;
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-float GetElapsedTimeInSeconds()
-{
-    // Returns the elapsed time (in seconds) since the last time this function
-    // was called. This elaborate setup is to guard against large spikes in
-    // the time returned by QueryPerformanceCounter().
+void RenderText() {
+  std::ostringstream output;
 
-    static const int MAX_SAMPLE_COUNT = 50;
+  if(g_displayHelp) {
+    output << "Press W or UP to roll the ball forwards" << std::endl
+           << "Press S or DOWN to roll the ball backwards" << std::endl
+           << "Press D or RIGHT to turn the ball to the right" << std::endl
+           << "Press A or LEFT to turn the ball to the left" << std::endl
+           << std::endl
+           << "Press V to enable/disable vertical sync" << std::endl
+           << "Press SPACE to enable and disable the camera's spring system" << std::endl
+           << "Press + and - to change the camera's spring constant" << std::endl
+           << "Press ALT and ENTER to toggle full screen" << std::endl
+           << "Press ESC to exit" << std::endl
+           << std::endl
+           << "Press H to hide help";
+  } else {
+    output.setf(std::ios::fixed, std::ios::floatfield);
+    output << std::setprecision(2);
 
-    static float frameTimes[MAX_SAMPLE_COUNT];
-    static float timeScale = 0.0f;
-    static float actualElapsedTimeSec = 0.0f;
-    static INT64 freq = 0;
-    static INT64 lastTime = 0;
-    static int sampleCount = 0;
-    static bool initialized = false;
+    output << "FPS: " << g_framesPerSecond << std::endl
+           << "Multisample anti-aliasing: " << g_msaaSamples << "x" << std::endl
+           << "Anisotropic filtering: " << g_maxAnisotrophy << "x" << std::endl
+           << "Vertical sync: " << (g_enableVerticalSync ? "enabled" : "disabled") << std::endl
+           << std::endl
+           << "Camera" << std::endl
+           << "  Spring " << (g_camera.springSystemIsEnabled() ? "enabled" : "disabled") << std::endl
+           << "  Spring constant: " << g_camera.getSpringConstant() << std::endl
+           << "  Damping constant: " << g_camera.getDampingConstant() << std::endl
+           << std::endl
+           << "Press H to display help";
+  }
 
-    INT64 time = 0;
-    float elapsedTimeSec = 0.0f;
-
-    if (!initialized)
-    {
-        initialized = true;
-        QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER*>(&freq));
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&lastTime));
-        timeScale = 1.0f / freq;
-    }
-
-    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&time));
-    elapsedTimeSec = (time - lastTime) * timeScale;
-    lastTime = time;
-
-    if (fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0f)
-    {
-        memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
-        frameTimes[0] = elapsedTimeSec;
-
-        if (sampleCount < MAX_SAMPLE_COUNT)
-            ++sampleCount;
-    }
-
-    actualElapsedTimeSec = 0.0f;
-
-    for (int i = 0; i < sampleCount; ++i)
-        actualElapsedTimeSec += frameTimes[i];
-
-    if (sampleCount > 0)
-        actualElapsedTimeSec /= sampleCount;
-
-    return actualElapsedTimeSec;
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowResolution.x) / 2.0F, static_cast<float>(g_windowResolution.y)));
+  ImGui::Begin("Text", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
+  ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", output.str().c_str());
+  ImGui::End();
 }
 
-bool Init()
-{
-    try
-    {
-        InitGL();
-
-        if (!ExtensionSupported("GL_ARB_multitexture"))
-            throw std::runtime_error("Required extension not supported: GL_ARB_multitexture.");
-
-        InitApp();
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        std::ostringstream msg;
-
-        msg << "Application initialization failed!" << std::endl << std::endl;
-        msg << e.what();
-
-        Log(msg.str().c_str());
-        return false;
-    }
+void ToggleFullScreen() {
+  // TODO(Hussein): Implement me
 }
 
-void InitApp()
-{
-    // Setup fonts.
+void UpdateBall(float elapsedTimeSec) {
+  Keyboard &keyboard = Keyboard::instance();
+  float pitch = 0.0F;
+  float heading = 0.0F;
+  float forwardSpeed = 0.0F;
 
-    if (!g_font.create("Arial", 10, GLFont::BOLD))
-        throw std::runtime_error("Failed to create font.");
+  if(keyboard.keyDown(SDL_SCANCODE_W) || keyboard.keyDown(SDL_SCANCODE_UP)) {
+    forwardSpeed = BALL_FORWARD_SPEED;
+    pitch = -BALL_ROLLING_SPEED;
+  }
 
-    // Setup textures.
+  if(keyboard.keyDown(SDL_SCANCODE_S) || keyboard.keyDown(SDL_SCANCODE_DOWN)) {
+    forwardSpeed = -BALL_FORWARD_SPEED;
+    pitch = BALL_ROLLING_SPEED;
+  }
 
-    if (!(g_ballColorMapTexture = LoadTexture("ball_color_map.jpg")))
-        throw std::runtime_error("Failed to load texture: ball_color_map.jpg");
+  if(keyboard.keyDown(SDL_SCANCODE_D) || keyboard.keyDown(SDL_SCANCODE_RIGHT))
+    heading = -BALL_HEADING_SPEED;
 
-    if (!(g_floorColorMapTexture = LoadTexture("floor_color_map.jpg")))
-        throw std::runtime_error("Failed to load texture: floor_color_map.jpg");
+  if(keyboard.keyDown(SDL_SCANCODE_A) || keyboard.keyDown(SDL_SCANCODE_LEFT))
+    heading = BALL_HEADING_SPEED;
 
-    if (!(g_floorLightMapTexture = LoadTexture("floor_light_map.jpg")))
-        throw std::runtime_error("Failed to load texture: floor_light_map.jpg");
+  // Prevent the ball from rolling off the edge of the floor.
+  forwardSpeed = ClipBallToFloor(g_ball, forwardSpeed, elapsedTimeSec);
 
-    // Setup display list for the floor.
+  // First move the ball.
+  g_ball.setVelocity(0.0F, 0.0F, forwardSpeed);
+  g_ball.orient(heading, 0.0F, 0.0F);
+  g_ball.rotate(0.0F, pitch, 0.0F);
+  g_ball.update(elapsedTimeSec);
 
-    g_floorDisplayList = glGenLists(1);
-    glNewList(g_floorDisplayList, GL_COMPILE);   
-    glBegin(GL_QUADS);
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);    
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
-        glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+  // Then move the camera based on where the ball has moved to.
+  // When the ball is moving backwards rotations are inverted to match
+  // the direction of travel. Consequently the camera's rotation needs to be
+  // inverted as well.
 
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0f);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 0.0f);
-        glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 1.0f);
-        glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 1.0f);
-        glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
-    glEnd();
-    glEndList();
-
-    // Initialize the quadric object used to create and render the ball.
-
-    if (!(g_pQuadricObj = gluNewQuadric()))
-        throw std::runtime_error("gluNewQuadric() failed.");
-
-    gluQuadricTexture(g_pQuadricObj, GL_TRUE);
-    gluQuadricNormals(g_pQuadricObj, GL_SMOOTH);
-    gluQuadricOrientation(g_pQuadricObj, GLU_OUTSIDE);
-
-    // Initialize the ball.
-
-    g_ball.constrainToWorldYAxis(true);
-    g_ball.setPosition(0.0f, 1.0f + BALL_RADIUS, 0.0f);
-
-    // Setup the camera.
-
-    g_camera.perspective(CAMERA_FOVX,
-        static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-        CAMERA_ZNEAR, CAMERA_ZFAR);
-
-    g_camera.lookAt(Vector3(0.0f, BALL_RADIUS * 3.0f, BALL_RADIUS * 7.0f),
-        Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f));
+  g_camera.rotate((forwardSpeed >= 0.0F) ? heading : -heading, 0.0F);
+  g_camera.lookAt(g_ball.getPosition());
+  g_camera.update(elapsedTimeSec);
 }
 
-void InitGL()
-{
-    if (!(g_hDC = GetDC(g_hWnd)))
-        throw std::runtime_error("GetDC() failed.");
+void UpdateFrame(float elapsedTimeSec) {
+  UpdateFrameRate(elapsedTimeSec);
 
-    int pf = 0;
-    PIXELFORMATDESCRIPTOR pfd = {0};
-    OSVERSIONINFO osvi = {0};
+  Keyboard::instance().update();
 
-    pfd.nSize = sizeof(pfd);
-    pfd.nVersion = 1;
-    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 24;
-    pfd.cDepthBits = 16;
-    pfd.iLayerType = PFD_MAIN_PLANE;
-
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-    if (!GetVersionEx(&osvi))
-        throw std::runtime_error("GetVersionEx() failed.");
-
-    // When running under Windows Vista or later support desktop composition.
-    if (osvi.dwMajorVersion > 6 || (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion >= 0))
-        pfd.dwFlags |=  PFD_SUPPORT_COMPOSITION;
-
-    ChooseBestMultiSampleAntiAliasingPixelFormat(pf, g_msaaSamples);
-
-    if (!pf)
-        pf = ChoosePixelFormat(g_hDC, &pfd);
-
-    if (!SetPixelFormat(g_hDC, pf, &pfd))
-        throw std::runtime_error("SetPixelFormat() failed.");
-
-    if (!(g_hRC = wglCreateContext(g_hDC)))
-        throw std::runtime_error("wglCreateContext() failed.");
-
-    if (!wglMakeCurrent(g_hDC, g_hRC))
-        throw std::runtime_error("wglMakeCurrent() failed.");
-
-    EnableVerticalSync(false);
-
-    // Check for GL_EXT_texture_filter_anisotropic support.
-    if (ExtensionSupported("GL_EXT_texture_filter_anisotropic"))
-        glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
-    else
-        g_maxAnisotrophy = 1;
+  ProcessUserInput();
+  UpdateBall(elapsedTimeSec);
 }
 
-GLuint LoadTexture(const char *pszFilename)
-{
-    return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR,
-        GL_REPEAT, GL_REPEAT);
+void UpdateFrameRate(float elapsedTimeSec) {
+  static float accumTimeSec = 0.0F;
+  static int frames = 0;
+
+  accumTimeSec += elapsedTimeSec;
+
+  if(accumTimeSec > 1.0F) {
+    g_framesPerSecond = frames;
+    frames = 0;
+    accumTimeSec = 0.0F;
+  } else {
+    ++frames;
+  }
 }
 
-GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
-                   GLint wrapS, GLint wrapT)
-{
-    GLuint id = 0;
-    Bitmap bitmap;
+inline size_t uboAligned(size_t size) { return ((size + 255) / 256) * 256; }
 
-    if (bitmap.loadPicture(pszFilename))
-    {
-        // The Bitmap class loads images and orients them top-down.
-        // OpenGL expects bitmap images to be oriented bottom-up.
-        bitmap.flipVertical();
+void createUniformBuffers() {
+  glCreateBuffers(1, &g_UBO);
+  glNamedBufferStorage(g_UBO, uboAligned(sizeof(glm::mat4)), nullptr, GL_DYNAMIC_STORAGE_BIT);
+}
 
-        glGenTextures(1, &id);
-        glBindTexture(GL_TEXTURE_2D, id);
+void createFloorBuffers() {
+  glGenVertexArrays(1, &g_floorVAO);
+  glBindVertexArray(g_floorVAO);
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
+  // clang-format off
+  // Wound counter-clockwise as seen from above so the floor survives the
+  // GL_CULL_FACE that RenderFrame() enables. This is the triangulation of the
+  // original demo's GL_QUADS winding (v0, v1, v2, v3); the {3,1,0, 3,2,1} used
+  // by the other demos faces the other way and is only visible from underneath.
+  constexpr std::array<uint16_t, 6> elements = {
+      0, 1, 2,
+      0, 2, 3
+  };
+  constexpr std::array<float, 4 * 7> vertices = {
+    -FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, 0.0F,         0.0F,         0.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, 0.0F,         1.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, FLOOR_TILE_T, 1.0F, 1.0F,
+    -FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, 0.00F,        FLOOR_TILE_T, 0.0F, 1.0F,
+  };
+  // clang-format on
 
-        if (g_maxAnisotrophy > 1)
-        {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                g_maxAnisotrophy);
-        }
+  constexpr auto verticesSize = vertices.size() * sizeof(float);
 
-        gluBuild2DMipmaps(GL_TEXTURE_2D, 4, bitmap.width, bitmap.height,
-            GL_BGRA_EXT, GL_UNSIGNED_BYTE, bitmap.getPixels());
+  glCreateBuffers(1, &g_floorVBO);
+  glNamedBufferStorage(g_floorVBO, verticesSize, vertices.data(), GL_DYNAMIC_STORAGE_BIT);
+
+  constexpr auto elementsSize = static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t));
+  glCreateBuffers(1, &g_floorEBO);
+  glNamedBufferStorage(g_floorEBO, elementsSize, elements.data(), GL_DYNAMIC_STORAGE_BIT);
+
+  constexpr auto PositionID = 0;
+  constexpr auto UV0ID = 1;
+  constexpr auto UV1ID = 2;
+
+  glBindVertexBuffer(0, g_floorVBO, 0, sizeof(float) * 7);
+
+  glEnableVertexAttribArray(PositionID);
+  glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, 0);
+  glVertexAttribBinding(PositionID, 0);
+
+  glEnableVertexAttribArray(UV0ID);
+  glVertexAttribFormat(UV0ID, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec3));
+  glVertexAttribBinding(UV0ID, 0);
+
+  glEnableVertexAttribArray(UV1ID);
+  glVertexAttribFormat(UV1ID, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec3) + sizeof(glm::vec2));
+  glVertexAttribBinding(UV1ID, 0);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_floorEBO);
+}
+
+void createBallBuffers() {
+  // gluSphere() is gone with GLU, so the UV sphere is generated by hand. Like
+  // gluSphere the poles sit on the z axis and t runs from 0 at -z to 1 at +z.
+  std::vector<BallVertex> vertices;
+  std::vector<uint16_t> elements;
+
+  const auto stackCount = static_cast<size_t>(BALL_STACKS);
+  const auto sliceCount = static_cast<size_t>(BALL_SLICES);
+
+  vertices.reserve((stackCount + 1) * (sliceCount + 1));
+  elements.reserve(stackCount * sliceCount * 6);
+
+  for(int stack = 0; stack <= BALL_STACKS; ++stack) {
+    const float v = static_cast<float>(stack) / static_cast<float>(BALL_STACKS);
+    const float phi = v * PI;
+    const float cosPhi = std::cos(phi);
+    const float sinPhi = std::sin(phi);
+
+    for(int slice = 0; slice <= BALL_SLICES; ++slice) {
+      const float u = static_cast<float>(slice) / static_cast<float>(BALL_SLICES);
+      const float theta = u * 2.0F * PI;
+
+      const glm::vec3 normal = {sinPhi * std::cos(theta), sinPhi * std::sin(theta), cosPhi};
+      vertices.push_back({normal * BALL_RADIUS, normal, {u, 1.0F - v}});
     }
+  }
 
-    return id;
+  const auto verticesPerRow = BALL_SLICES + 1;
+
+  for(int stack = 0; stack < BALL_STACKS; ++stack) {
+    for(int slice = 0; slice < BALL_SLICES; ++slice) {
+      const auto i0 = static_cast<uint16_t>((stack * verticesPerRow) + slice);
+      const auto i1 = static_cast<uint16_t>(((stack + 1) * verticesPerRow) + slice);
+      const auto i2 = static_cast<uint16_t>(((stack + 1) * verticesPerRow) + slice + 1);
+      const auto i3 = static_cast<uint16_t>((stack * verticesPerRow) + slice + 1);
+
+      elements.push_back(i0);
+      elements.push_back(i1);
+      elements.push_back(i2);
+
+      elements.push_back(i0);
+      elements.push_back(i2);
+      elements.push_back(i3);
+    }
+  }
+
+  g_ballIndexCount = static_cast<GLsizei>(elements.size());
+
+  glGenVertexArrays(1, &g_ballVAO);
+  glBindVertexArray(g_ballVAO);
+
+  glCreateBuffers(1, &g_ballVBO);
+  glNamedBufferStorage(g_ballVBO, static_cast<GLsizeiptr>(vertices.size() * sizeof(BallVertex)), vertices.data(), GL_DYNAMIC_STORAGE_BIT);
+
+  glCreateBuffers(1, &g_ballEBO);
+  glNamedBufferStorage(g_ballEBO, static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t)), elements.data(), GL_DYNAMIC_STORAGE_BIT);
+
+  constexpr auto PositionID = 0;
+  constexpr auto NormalID = 1;
+  constexpr auto TexCoordID = 2;
+
+  glBindVertexBuffer(0, g_ballVBO, 0, sizeof(BallVertex));
+
+  glEnableVertexAttribArray(PositionID);
+  glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, offsetof(BallVertex, position));
+  glVertexAttribBinding(PositionID, 0);
+
+  glEnableVertexAttribArray(NormalID);
+  glVertexAttribFormat(NormalID, 3, GL_FLOAT, GL_FALSE, offsetof(BallVertex, normal));
+  glVertexAttribBinding(NormalID, 0);
+
+  glEnableVertexAttribArray(TexCoordID);
+  glVertexAttribFormat(TexCoordID, 2, GL_FLOAT, GL_FALSE, offsetof(BallVertex, texCoord));
+  glVertexAttribBinding(TexCoordID, 0);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ballEBO);
 }
 
-void Log(const char *pszMessage)
-{
-    MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
+void createFloorProgram() {
+  constexpr std::string_view VertexShader = R"(
+  #version 460 core
+
+  layout(location=0) in vec3 aPosition;
+  layout(location=1) in vec2 aUV0;
+  layout(location=2) in vec2 aUV1;
+
+  layout(std140, binding=0) uniform Matrices
+  {
+      mat4 uMVP;
+  };
+
+  out Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } OUT;
+
+  void main() {
+    OUT.wUV0 = aUV0;
+    OUT.wUV1 = aUV1;
+    gl_Position = uMVP * vec4(aPosition, 1);
+  }
+  )";
+  constexpr std::string_view FragmentShader = R"(
+  #version 460 core
+
+  in Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } IN;
+
+  uniform sampler2D uTexture0;
+  uniform sampler2D uTexture1;
+
+  layout(location=0) out vec4 out_Color;
+
+  void main() {
+    out_Color = texture(uTexture0, IN.wUV0) * texture(uTexture1, IN.wUV1);
+  }
+  )";
+
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER, VertexShader.data());
+  if(vertexShader == -1)
+    std::exit(EXIT_FAILURE);
+
+  const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());
+  if(fragmentShader == -1)
+    std::exit(EXIT_FAILURE);
+
+  const auto program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(program == -1)
+    std::exit(EXIT_FAILURE);
+
+  glDeleteShader(static_cast<GLuint>(vertexShader));
+  glDeleteShader(static_cast<GLuint>(fragmentShader));
+
+  g_floorProgram = static_cast<GLuint>(program);
+
+  g_uFloorTexture0Location = glGetUniformLocation(g_floorProgram, "uTexture0");
+  g_uFloorTexture1Location = glGetUniformLocation(g_floorProgram, "uTexture1");
 }
 
-void ProcessUserInput()
-{
-    Keyboard &keyboard = Keyboard::instance();
+void createBallProgram() {
+  constexpr std::string_view VertexShader = R"(
+  #version 460 core
 
-    if (keyboard.keyPressed(Keyboard::KEY_ESCAPE))
-        PostMessage(g_hWnd, WM_CLOSE, 0, 0);
+  layout(location=0) in vec3 aPosition;
+  layout(location=1) in vec3 aNormal;
+  layout(location=2) in vec2 aTexCoord;
 
-    if (keyboard.keyDown(Keyboard::KEY_LALT) || keyboard.keyDown(Keyboard::KEY_RALT))
-    {
-        if (keyboard.keyPressed(Keyboard::KEY_ENTER))
-            ToggleFullScreen();
-    }
+  layout(std140, binding=0) uniform Matrices
+  {
+      mat4 uMVP;
+  };
 
-    if (keyboard.keyPressed(Keyboard::KEY_H))
-        g_displayHelp = !g_displayHelp;
+  uniform mat3 uNormalMatrix;
 
-    if (keyboard.keyPressed(Keyboard::KEY_V))
-        EnableVerticalSync(!g_enableVerticalSync);
+  out Interpolants {
+    vec3 wNormal;
+    vec2 wTexCoord;
+  } OUT;
 
-    if (keyboard.keyPressed(Keyboard::KEY_SPACE))
-        g_camera.enableSpringSystem(!g_camera.springSystemIsEnabled());
+  void main() {
+    OUT.wNormal = normalize(uNormalMatrix * aNormal);
+    OUT.wTexCoord = aTexCoord;
+    gl_Position = uMVP * vec4(aPosition, 1.0);
+  }
+  )";
+  constexpr std::string_view FragmentShader = R"(
+  #version 460 core
 
-    if (keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD))
-    {
-        float springConstant = g_camera.getSpringConstant() + 0.1f;
+  in Interpolants {
+    vec3 wNormal;
+    vec2 wTexCoord;
+  } IN;
 
-        springConstant = min(CAMERA_MAX_SPRING_CONSTANT, springConstant);
-        g_camera.setSpringConstant(springConstant);
-    }
+  uniform sampler2D uTexture;
+  uniform vec3 uLightDir;
 
-    if (keyboard.keyPressed(Keyboard::KEY_SUBTRACT) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT))
-    {
-        float springConstant = g_camera.getSpringConstant() - 0.1f;
+  layout(location=0) out vec4 out_Color;
 
-        springConstant = max(CAMERA_MIN_SPRING_CONSTANT, springConstant);
-        g_camera.setSpringConstant(springConstant);
-    }
+  void main() {
+    vec3 N = normalize(IN.wNormal);
+    vec3 L = normalize(uLightDir);
+
+    // Matches the fixed function default: a global ambient term plus a white
+    // diffuse light, modulating the texture.
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 lighting = vec3(0.2) + vec3(0.8) * NdotL;
+
+    out_Color = vec4(texture(uTexture, IN.wTexCoord).rgb * lighting, 1.0);
+  }
+  )";
+
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER, VertexShader.data());
+  if(vertexShader == -1)
+    std::exit(EXIT_FAILURE);
+
+  const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());
+  if(fragmentShader == -1)
+    std::exit(EXIT_FAILURE);
+
+  const auto program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(program == -1)
+    std::exit(EXIT_FAILURE);
+
+  glDeleteShader(static_cast<GLuint>(vertexShader));
+  glDeleteShader(static_cast<GLuint>(fragmentShader));
+
+  g_ballProgram = static_cast<GLuint>(program);
+
+  g_uBallTextureLocation = glGetUniformLocation(g_ballProgram, "uTexture");
+  g_uBallNormalMatrixLocation = glGetUniformLocation(g_ballProgram, "uNormalMatrix");
+  g_uBallLightDirLocation = glGetUniformLocation(g_ballProgram, "uLightDir");
 }
 
-void RenderBall()
-{
-    static float lightDir[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+void Cleanup() {
+  CleanupApp();
 
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_ballColorMapTexture);
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL2_Shutdown();
+  ImGui::DestroyContext();
 
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
+  if(nullptr != g_glcontext) {
+    SDL_GL_DeleteContext(g_glcontext);
+    g_glcontext = nullptr;
+  }
 
-    glPushMatrix();
-
-    lightDir[0] = g_camera.getZAxis().x;
-    lightDir[1] = g_camera.getZAxis().y;
-    lightDir[2] = g_camera.getZAxis().z;
-
-    glLightfv(GL_LIGHT0, GL_POSITION, lightDir);
-
-    glMultMatrixf(&g_ball.getWorldMatrix()[0][0]);
-    gluSphere(g_pQuadricObj, BALL_RADIUS, BALL_SLICES, BALL_STACKS);   
-    glPopMatrix();
-
-    glDisable(GL_LIGHT0);
-    glDisable(GL_LIGHTING);
-
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);    
+  if(nullptr != g_pWindow) {
+    SDL_DestroyWindow(g_pWindow);
+    g_pWindow = nullptr;
+  }
 }
 
-void RenderFloor()
-{
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
+void CleanupApp() {
+  if(g_ballColorMapTexture) {
+    glDeleteTextures(1, &g_ballColorMapTexture);
+    g_ballColorMapTexture = 0;
+  }
 
-    glActiveTextureARB(GL_TEXTURE1_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
+  if(g_floorColorMapTexture) {
+    glDeleteTextures(1, &g_floorColorMapTexture);
+    g_floorColorMapTexture = 0;
+  }
 
-    glCallList(g_floorDisplayList);
+  if(g_floorLightMapTexture) {
+    glDeleteTextures(1, &g_floorLightMapTexture);
+    g_floorLightMapTexture = 0;
+  }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
+  if(g_floorVAO) {
+    glDeleteVertexArrays(1, &g_floorVAO);
+    g_floorVAO = 0;
+  }
+  if(g_floorVBO) {
+    glDeleteBuffers(1, &g_floorVBO);
+    g_floorVBO = 0;
+  }
+  if(g_floorEBO) {
+    glDeleteBuffers(1, &g_floorEBO);
+    g_floorEBO = 0;
+  }
+  if(g_floorProgram) {
+    glDeleteProgram(g_floorProgram);
+    g_floorProgram = 0;
+  }
 
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
-}
+  if(g_ballVAO) {
+    glDeleteVertexArrays(1, &g_ballVAO);
+    g_ballVAO = 0;
+  }
+  if(g_ballVBO) {
+    glDeleteBuffers(1, &g_ballVBO);
+    g_ballVBO = 0;
+  }
+  if(g_ballEBO) {
+    glDeleteBuffers(1, &g_ballEBO);
+    g_ballEBO = 0;
+  }
+  if(g_ballProgram) {
+    glDeleteProgram(g_ballProgram);
+    g_ballProgram = 0;
+  }
 
-void RenderFrame()
-{
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-
-    glViewport(0, 0, g_windowWidth, g_windowHeight);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(&g_camera.getProjectionMatrix()[0][0]);
-    
-    glMatrixMode(GL_MODELVIEW);
-    glLoadMatrixf(&g_camera.getViewMatrix()[0][0]);
-
-    RenderBall();
-    RenderFloor();
-    RenderText();
-}
-
-void RenderText()
-{
-    std::ostringstream output;
-
-    if (g_displayHelp)
-    {
-        output
-            << "Press W or UP to roll the ball forwards" << std::endl
-            << "Press S or DOWN to roll the ball backwards" << std::endl
-            << "Press D or RIGHT to turn the ball to the right" << std::endl
-            << "Press A or LEFT to turn the ball to the left" << std::endl
-            << std::endl
-            << "Press V to enable/disable vertical sync" << std::endl
-            << "Press SPACE to enable and disable the camera's spring system" << std::endl
-            << "Press + and - to change the camera's spring constant" << std::endl
-            << "Press ALT and ENTER to toggle full screen" << std::endl
-            << "Press ESC to exit" << std::endl
-            << std::endl
-            << "Press H to hide help";
-    }
-    else
-    {
-        bool springOn = g_camera.springSystemIsEnabled();
-        float springConstant = g_camera.getSpringConstant();
-        float dampingConstant = g_camera.getDampingConstant();
-
-        output.setf(std::ios::fixed, std::ios::floatfield);
-        output << std::setprecision(2);
-
-        output
-            << "FPS: " << g_framesPerSecond << std::endl
-            << "Multisample anti-aliasing: " << g_msaaSamples << "x" << std::endl
-            << "Anisotropic filtering: " << g_maxAnisotrophy << "x" << std::endl
-            << "Vertical sync: " << (g_enableVerticalSync ? "enabled" : "disabled") << std::endl
-            << std::endl
-            << "Camera" << std::endl
-            << "  Spring " << (springOn ? "enabled" : "disabled") << std::endl
-            << "  Spring constant: " << springConstant << std::endl
-            << "  Damping constant: " << dampingConstant << std::endl
-            << std::endl
-            << "Press H to display help";
-    }
-
-    g_font.begin();
-    g_font.setColor(1.0f, 1.0f, 0.0f);
-    g_font.drawText(1, 1, output.str().c_str());
-    g_font.end();
-}
-
-void SetProcessorAffinity()
-{
-    // Assign the current thread to one processor. This ensures that timing
-    // code runs on only one processor, and will not suffer any ill effects
-    // from power management.
-    //
-    // Based on DXUTSetProcessorAffinity() function from the DXUT framework.
-
-    DWORD_PTR dwProcessAffinityMask = 0;
-    DWORD_PTR dwSystemAffinityMask = 0;
-    HANDLE hCurrentProcess = GetCurrentProcess();
-
-    if (!GetProcessAffinityMask(hCurrentProcess, &dwProcessAffinityMask, &dwSystemAffinityMask))
-        return;
-
-    if (dwProcessAffinityMask)
-    {
-        // Find the lowest processor that our process is allowed to run against.
-
-        DWORD_PTR dwAffinityMask = (dwProcessAffinityMask & ((~dwProcessAffinityMask) + 1));
-
-        // Set this as the processor that our thread must always run against.
-        // This must be a subset of the process affinity mask.
-
-        HANDLE hCurrentThread = GetCurrentThread();
-
-        if (hCurrentThread != INVALID_HANDLE_VALUE)
-        {
-            SetThreadAffinityMask(hCurrentThread, dwAffinityMask);
-            CloseHandle(hCurrentThread);
-        }
-    }
-
-    CloseHandle(hCurrentProcess);
-}
-
-void ToggleFullScreen()
-{
-    static DWORD savedExStyle;
-    static DWORD savedStyle;
-    static RECT rcSaved;
-
-    g_isFullScreen = !g_isFullScreen;
-
-    if (g_isFullScreen)
-    {
-        // Moving to full screen mode.
-
-        savedExStyle = GetWindowLong(g_hWnd, GWL_EXSTYLE);
-        savedStyle = GetWindowLong(g_hWnd, GWL_STYLE);
-        GetWindowRect(g_hWnd, &rcSaved);
-
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, 0);
-        SetWindowLong(g_hWnd, GWL_STYLE, WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-        SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-
-        g_windowWidth = GetSystemMetrics(SM_CXSCREEN);
-        g_windowHeight = GetSystemMetrics(SM_CYSCREEN);
-
-        SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0,
-            g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    }
-    else
-    {
-        // Moving back to windowed mode.
-
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, savedExStyle);
-        SetWindowLong(g_hWnd, GWL_STYLE, savedStyle);
-        SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-
-        g_windowWidth = rcSaved.right - rcSaved.left;
-        g_windowHeight = rcSaved.bottom - rcSaved.top;
-
-        SetWindowPos(g_hWnd, HWND_NOTOPMOST, rcSaved.left, rcSaved.top,
-            g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    }
-
-    g_camera.perspective(CAMERA_FOVX,
-        static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-        CAMERA_ZNEAR, CAMERA_ZFAR);
-}
-
-void UpdateBall(float elapsedTimeSec)
-{
-    Keyboard &keyboard = Keyboard::instance();
-    float pitch = 0.0f;
-    float heading = 0.0f;
-    float forwardSpeed = 0.0f;
-
-    if (keyboard.keyDown(Keyboard::KEY_W) || keyboard.keyDown(Keyboard::KEY_UP))
-    {
-        forwardSpeed = BALL_FORWARD_SPEED;
-        pitch = -BALL_ROLLING_SPEED;
-    }
-
-    if (keyboard.keyDown(Keyboard::KEY_S) || keyboard.keyDown(Keyboard::KEY_DOWN))
-    {
-        forwardSpeed = -BALL_FORWARD_SPEED;
-        pitch = BALL_ROLLING_SPEED;
-    }
-
-    if (keyboard.keyDown(Keyboard::KEY_D) || keyboard.keyDown(Keyboard::KEY_RIGHT))
-        heading = -BALL_HEADING_SPEED;
-
-    if (keyboard.keyDown(Keyboard::KEY_A) || keyboard.keyDown(Keyboard::KEY_LEFT))
-        heading = BALL_HEADING_SPEED;
-
-    // Prevent the ball from rolling off the edge of the floor.
-    forwardSpeed = ClipBallToFloor(g_ball, forwardSpeed, elapsedTimeSec);
-
-    // First move the ball.
-    g_ball.setVelocity(0.0f, 0.0f, forwardSpeed);
-    g_ball.orient(heading, 0.0f, 0.0f);
-    g_ball.rotate(0.0f, pitch, 0.0f);
-    g_ball.update(elapsedTimeSec);
-
-    // Then move the camera based on where the ball has moved to.
-    // When the ball is moving backwards rotations are inverted to match
-    // the direction of travel. Consequently the camera's rotation needs to be
-    // inverted as well.
-
-    g_camera.rotate((forwardSpeed >= 0.0f) ? heading : -heading, 0.0f);
-    g_camera.lookAt(g_ball.getPosition());
-    g_camera.update(elapsedTimeSec);
-}
-
-void UpdateFrame(float elapsedTimeSec)
-{
-    Keyboard::instance().update();
-    ProcessUserInput();
-
-    UpdateFrameRate(elapsedTimeSec);
-    UpdateBall(elapsedTimeSec);
-}
-
-void UpdateFrameRate(float elapsedTimeSec)
-{
-    static float accumTimeSec = 0.0f;
-    static int frames = 0;
-
-    accumTimeSec += elapsedTimeSec;
-
-    if (accumTimeSec > 1.0f)
-    {
-        g_framesPerSecond = frames;
-
-        frames = 0;
-        accumTimeSec = 0.0f;
-    }
-    else
-    {
-        ++frames;
-    }
+  if(g_UBO) {
+    glDeleteBuffers(1, &g_UBO);
+    g_UBO = 0;
+  }
 }
