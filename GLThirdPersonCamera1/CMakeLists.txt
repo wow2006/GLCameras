@@ -3,8 +3,7 @@ project(GLThirdPersonCamera1 LANGUAGES CXX)
 
 add_executable(GLThirdPersonCamera1)
 
-target_sources(GLThirdPersonCamera1 PRIVATE entity3d.cpp main.cpp
-                                            third_person_camera.cpp)
+target_sources(GLThirdPersonCamera1 PRIVATE main.cpp third_person_camera.cpp)
 
 target_link_libraries(
   GLThirdPersonCamera1

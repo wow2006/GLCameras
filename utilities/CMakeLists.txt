@@ -1,5 +1,6 @@
 # ${CMAKE_SOURCE_DIR}/utilities/CMakeLists.txt
-add_library(utilities STATIC input.hpp input.cpp shaders.hpp shaders.cpp)
+add_library(utilities STATIC entity3d.hpp entity3d.cpp input.hpp input.cpp
+                             shaders.hpp shaders.cpp)
 
 add_library(camera::utilities ALIAS utilities)
 
