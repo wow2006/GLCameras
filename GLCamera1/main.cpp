@@ -917,11 +917,11 @@ void Cleanup() {
   ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
 
-  if(nullptr == g_glcontext) {
+  if(nullptr != g_glcontext) {
     SDL_GL_DeleteContext(g_glcontext);
     g_glcontext = nullptr;
   }
-  if(nullptr == g_pWindow) {
+  if(nullptr != g_pWindow) {
     SDL_DestroyWindow(g_pWindow);
     g_pWindow = nullptr;
   }
