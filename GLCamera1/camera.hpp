@@ -42,9 +42,9 @@
 // updatePosition() method.
 //-----------------------------------------------------------------------------
 
-class Camera {
+class Camera final {
 public:
-  enum class CameraBehavior { CAMERA_BEHAVIOR_FIRST_PERSON, CAMERA_BEHAVIOR_FLIGHT };
+  enum class CameraBehavior : uint8_t { CAMERA_BEHAVIOR_FIRST_PERSON, CAMERA_BEHAVIOR_FLIGHT };
 
   Camera();
 
