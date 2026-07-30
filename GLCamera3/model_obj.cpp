@@ -51,7 +51,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
-#include "model_obj.h"
+#include "model_obj.hpp"
 
 int ModelOBJ::m_faceIndexCache[FACE_INDEX_CACHE_SIZE];
 

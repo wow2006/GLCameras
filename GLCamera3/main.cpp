@@ -1,5 +1,5 @@
 //-----------------------------------------------------------------------------
-// Copyright (c) 2007-2008 dhpoware. All Rights Reserved.
+// Copyright (c) 2007-2008 dhpoware. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -20,1367 +20,1151 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 //
-// This is the fourth demo in the OpenGL camera demo series and it builds on
-// the previous 2 demos in the series:
-//
-//  OpenGL Camera Demo - Part 2
-//  (http://www.dhpoware.com/demos/glCamera2.html)
-//
-//  OpenGL Third Person Camera Demo - Part 1
-//  (http://www.dhpoware.com/demos/glThirdPersonCamera1.html)
-//
-// This demo shows how various camera behaviors can be combined together. The
-// following camera behaviors are implemented in this demo: first person,
-// spectator, flight, and orbit. The first person camera behavior simulates
-// the view from the perspective of the player. The spectator camera behavior
-// simulates a floating camera that moves in the direction that the camera is
-// looking. The flight camera behavior simulates the view from the cockpit of
-// an airplane. Finally the orbit camera behavior simulates a third person view
-// of the player and allows the camera to orbit the player.
-//
-// The camera class that accompanies this demo uses quaternions throughout. Of
-// particular note is the class' implementation of the orbit camera behavior.
-// The orbit camera implementation differs considerably from the third person
-// camera model used in the OpenGL Third Person Camera Demo - Part 1.
-//
-// The OpenGL Third Person Camera Demo maintained an offset vector and used
-// quaternions to rotate this offset vector when the camera was being rotated.
-// The new camera position was then used to build a look-at style view matrix.
-//
-// This demo's orbit logic begins by setting the camera's orientation to that
-// of the orbit target. Then rotating the camera will affect this orientation.
-// So far this is exactly how the other camera behaviors (first person,
-// spectator, and flight) work. But once the orbit camera is rotated the
-// camera's view matrix is updated to accommodate the new orientation. The
-// view matrix requires the camera position to perform a dot product with each
-// of the three local axes. To implement a third person orbit style view of the
-// target the camera's position is calculated here to be a fixed distance from
-// the target's position. Specifically this demo takes the orbit target's world
-// position and translates this point by m_orbitOffsetDistance world units
-// along the camera's local Z axis.
-//
-// This demo uses the Windows XP raw input model and associated APIs to
-// retrieve mouse data directly from the mouse driver. This provides less
-// overhead compared to using DirectInput - which basically does this anyway.
-// Retrieving raw input from the mouse allows us to perform our own filtering
-// on the mouse data and also allows us to support high DPI resolution mice.
+// This is the third demo in the OpenGL camera demo series. It extends the
+// quaternion-based camera from GLCamera2 with spectator and orbit behaviors,
+// and renders a 3D OBJ model with Blinn-Phong lighting.
 //
 //-----------------------------------------------------------------------------
-
-#if !defined(WIN32_LEAN_AND_MEAN)
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <windows.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <cassert>
-#include <iomanip>
-#include <map>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-
-#if defined(_DEBUG)
-#include <crtdbg.h>
-#endif
-
-#include "GL_ARB_multitexture.h"
-#include "WGL_ARB_multisample.h"
-#include "bitmap.h"
-#include "camera.h"
-#include "gl_font.h"
-#include "input.h"
-#include "mathlib.h"
-#include "model_obj.h"
+// stb
+#include <stb_image.h>
+// SDL2
+#include <SDL2/SDL.h>
+//
+#include "camera.hpp"
+#include "input.hpp"
+#include "model_obj.hpp"
+#include "shaders.hpp"
 
 //-----------------------------------------------------------------------------
 // Constants.
 //-----------------------------------------------------------------------------
 
-#define APP_TITLE "OpenGL Camera Demo 3"
+namespace {
+constexpr auto APP_TITLE = "OpenGL Camera Demo 3";
 
-// GL_EXT_texture_filter_anisotropic
-#define GL_TEXTURE_MAX_ANISOTROPY_EXT       0x84FE
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT   0x84FF
+constexpr float FLOOR_WIDTH = 8.0F;
+constexpr float FLOOR_HEIGHT = 8.0F;
+constexpr float FLOOR_TILE_S = 8.0F;
+constexpr float FLOOR_TILE_T = 8.0F;
 
-const float     FLOOR_WIDTH = 8.0f;
-const float     FLOOR_HEIGHT = 8.0f;
-const float     FLOOR_TILE_S = 8.0f;
-const float     FLOOR_TILE_T = 8.0f;
+constexpr float CAMERA_FOVX = 90.0F;
+constexpr float CAMERA_ZFAR = 100.0F;
+constexpr float CAMERA_ZNEAR = 0.1F;
+constexpr float CAMERA_ZOOM_MAX = 5.0F;
+constexpr float CAMERA_ZOOM_MIN = 1.5F;
 
-const float     CAMERA_FOVX = 90.0f;
-const float     CAMERA_ZFAR = 100.0f;
-const float     CAMERA_ZNEAR = 0.1f;
-const float     CAMERA_ZOOM_MAX = 5.0f;
-const float     CAMERA_ZOOM_MIN = 1.5f;
+constexpr float CAMERA_SPEED_FLIGHT_YAW = 100.0F;
+constexpr float CAMERA_SPEED_ORBIT_ROLL = 100.0F;
 
-const float     CAMERA_SPEED_FLIGHT_YAW = 100.0f;
-const float     CAMERA_SPEED_ORBIT_ROLL = 100.0f;
+constexpr glm::vec3 CAMERA_ACCELERATION(4.0F, 4.0F, 4.0F);
+constexpr glm::vec3 CAMERA_VELOCITY(1.0F, 1.0F, 1.0F);
 
-const Vector3   CAMERA_ACCELERATION(4.0f, 4.0f, 4.0f);
-const Vector3   CAMERA_VELOCITY(1.0f, 1.0f, 1.0f);
+constexpr uint32_t MATRICES_BINDING_POINT = 0;
+}  // namespace
 
 //-----------------------------------------------------------------------------
 // Globals.
 //-----------------------------------------------------------------------------
 
-HWND                g_hWnd;
-HDC                 g_hDC;
-HGLRC               g_hRC;
-HINSTANCE           g_hInstance;
-int                 g_framesPerSecond;
-int                 g_windowWidth;
-int                 g_windowHeight;
-int                 g_msaaSamples;
-int                 g_maxAnisotrophy;
-GLuint              g_floorColorMapTexture;
-GLuint              g_floorLightMapTexture;
-GLuint              g_floorDisplayList;
-bool                g_isFullScreen;
-bool                g_hasFocus;
-bool                g_enableVerticalSync;
-bool                g_displayHelp;
-Camera              g_camera;
-Quaternion          g_meshOrientation;
-Vector3             g_meshPosition;
-ModelOBJ            g_model;
-GLFont              g_font;
-Vector3             g_cameraBoundsMax;
-Vector3             g_cameraBoundsMin;
+int g_framesPerSecond;
+glm::ivec2 g_windowResolution;
+int g_msaaSamples;
+int g_maxAnisotrophy;
+bool g_isFullScreen;
+bool g_hasFocus;
+bool g_enableVerticalSync;
+bool g_displayHelp;
+bool g_modelLoaded;
+GLuint g_floorColorMapTexture;
+GLuint g_floorLightMapTexture;
+Camera g_camera;
+glm::quat g_meshOrientation;
+glm::vec3 g_meshPosition;
+ModelOBJ g_model;
+glm::vec3 g_cameraBoundsMax;
+glm::vec3 g_cameraBoundsMin;
+SDL_Window *g_pWindow = nullptr;
+SDL_GLContext g_glcontext = nullptr;
 
-typedef std::map<std::string, GLuint> ModelTextures;
-ModelTextures       g_modelTextures;
+GLuint g_floorVAO = 0;
+GLuint g_floorVBO = 0;
+GLuint g_floorEBO = 0;
+GLuint g_UBO = 0;
+GLuint g_floorProgram = 0;
+
+GLint g_uFloorTexture0Location;
+GLint g_uFloorTexture1Location;
+
+GLuint g_modelVAO = 0;
+GLuint g_modelVBO = 0;
+GLuint g_modelEBO = 0;
+GLuint g_modelProgram = 0;
+
+GLint g_uModelMVPLocation;
+GLint g_uModelMatrixLocation;
+GLint g_uNormalMatrixLocation;
+GLint g_uLightPosLocation;
+GLint g_uCameraPosLocation;
+GLint g_uMatAmbientLocation;
+GLint g_uMatDiffuseLocation;
+GLint g_uMatSpecularLocation;
+GLint g_uMatShininessLocation;
 
 //-----------------------------------------------------------------------------
 // Functions Prototypes.
 //-----------------------------------------------------------------------------
 
-void    BindTexture(GLuint texture, int unit, GLuint shader, const char *pszSamplerName);
-void    ChangeCameraBehavior(Camera::CameraBehavior behavior);
-void    Cleanup();
-void    CleanupApp();
-HWND    CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle);
-void    EnableVerticalSync(bool enableVerticalSync);
-bool    ExtensionSupported(const char *pszExtensionName);
-float   GetElapsedTimeInSeconds();
-void    GetMovementDirection(Vector3 &direction);
-bool    Init();
-void    InitApp();
-void    InitCamera();
-void    InitFloor();
-void    InitFont();
-void    InitModel();
-void    InitGL();
-GLuint  LoadTexture(const char *pszFilename);
-GLuint  LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter, GLint wrapS, GLint wrapT);
-void    Log(const char *pszMessage);
-void    PerformCameraCollisionDetection();
-void    ProcessUserInput();
-void    ReadTextFile(const char *pszFilename, std::string &buffer);
-void    RenderFloor();
-void    RenderFrame();
-void    RenderModel();
-void    RenderText();
-void    SetProcessorAffinity();
-void    ToggleFullScreen();
-void    UpdateCamera(float elapsedTimeSec);
-void    UpdateFrame(float elapsedTimeSec);
-void    UpdateFrameRate(float elapsedTimeSec);
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void ChangeCameraBehavior(Camera::CameraBehavior behavior);
+void Cleanup();
+void CleanupApp();
+float GetElapsedTimeInSeconds();
+void GetMovementDirection(glm::vec3 &direction);
+bool Init();
+void InitApp();
+void InitCamera();
+void InitGL();
+void InitImgui();
+void InitModel();
+GLuint LoadTexture(const char *pszFilename);
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT);
+void Log(const char *pszMessage);
+void PerformCameraCollisionDetection();
+void ProcessUserInput();
+void RenderFloor();
+void RenderFrame();
+void RenderModel();
+void RenderText();
+void UpdateCamera(float elapsedTimeSec);
+void UpdateFrame(float elapsedTimeSec);
+void UpdateFrameRate(float elapsedTimeSec);
+void ToggleFullScreen();
+void createFloorBuffers();
+void createModelBuffers();
+void createUniformBuffers();
+void createFloorProgram();
+void createModelProgram();
 
 //-----------------------------------------------------------------------------
 // Functions.
 //-----------------------------------------------------------------------------
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
-{
-#if defined _DEBUG
-    _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
+#if defined(_WIN32) && defined(_DEBUG)
+  _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
+  _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 #endif
+  if(0 != SDL_Init(SDL_INIT_VIDEO)) {
+    fmt::print(stderr, fg(fmt::color::red), "ERROR: Can not initailize SDL: {}\n", SDL_GetError());
+    return EXIT_FAILURE;
+  }
 
-    MSG msg = {0};
-    WNDCLASSEX wcl = {0};
+  SDL_DisplayMode mode{};
+  if(0 == SDL_GetDisplayMode(0, 0, &mode)) {
+    g_windowResolution = {mode.w / 2, mode.h / 2};
+  } else {
+    g_windowResolution = {800, 600};
+  }
 
-    wcl.cbSize = sizeof(wcl);
-    wcl.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-    wcl.lpfnWndProc = WindowProc;
-    wcl.cbClsExtra = 0;
-    wcl.cbWndExtra = 0;
-    wcl.hInstance = g_hInstance = hInstance;
-    wcl.hIcon = LoadIcon(0, IDI_APPLICATION);
-    wcl.hCursor = LoadCursor(0, IDC_ARROW);
-    wcl.hbrBackground = 0;
-    wcl.lpszMenuName = 0;
-    wcl.lpszClassName = "GLWindowClass";
-    wcl.hIconSm = 0;
+  constexpr auto flags =
+      SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_MOUSE_GRABBED | SDL_WINDOW_MOUSE_CAPTURE;
+  g_pWindow =
+      SDL_CreateWindow(APP_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, g_windowResolution.x, g_windowResolution.y, flags);
+  if(nullptr == g_pWindow) {
+    fmt::print(stderr, fg(fmt::color::red), "ERROR: Can not create SDL Window\n");
+    return EXIT_FAILURE;
+  }
 
-    if (!RegisterClassEx(&wcl))
-        return 0;
+  SDL_SetThreadPriority(SDL_THREAD_PRIORITY_TIME_CRITICAL);
 
-    g_hWnd = CreateAppWindow(wcl, APP_TITLE);
-
-    if (g_hWnd)
-    {
-        SetProcessorAffinity();
-
-        if (Init())
-        {
-            ShowWindow(g_hWnd, nShowCmd);
-            UpdateWindow(g_hWnd);
-
-            while (true)
-            {
-                while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
-                {
-                    if (msg.message == WM_QUIT)
-                        break;
-
-                    TranslateMessage(&msg);
-                    DispatchMessage(&msg);
-                }
-
-                if (msg.message == WM_QUIT)
-                    break;
-
-                if (g_hasFocus)
-                {
-                    UpdateFrame(GetElapsedTimeInSeconds());
-                    RenderFrame();
-                    SwapBuffers(g_hDC);
-                }
-                else
-                {
-                    WaitMessage();
-                }
-            }
+  if(Init()) {
+    Mouse::instance().moveToWindowCenter();
+    bool bRunning = true;
+    while(bRunning) {
+      SDL_Event event;
+      while(SDL_PollEvent(&event)) {
+        if(SDL_QUIT == event.type) {
+          bRunning = false;
         }
-
-        Cleanup();
-        UnregisterClass(wcl.lpszClassName, hInstance);
-    }
-
-    return static_cast<int>(msg.wParam);
-}
-
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    switch (msg)
-    {
-    case WM_ACTIVATE:
-        switch (wParam)
-        {
-        default:
+        if(SDL_KEYDOWN == event.type) {
+          if(SDL_SCANCODE_ESCAPE == event.key.keysym.scancode) {
+            bRunning = false;
+          }
+        }
+        if(SDL_WINDOWEVENT == event.type) {
+          const auto windowEvent = event.window;
+          switch(windowEvent.event) {
+          case SDL_WINDOWEVENT_RESIZED:
+            g_windowResolution = {static_cast<int>(windowEvent.data1), static_cast<int>(windowEvent.data2)};
             break;
-
-        case WA_ACTIVE:
-        case WA_CLICKACTIVE:
-            Mouse::instance().attach(hWnd);
+          case SDL_WINDOWEVENT_CLOSE: bRunning = false; break;
+          case SDL_WINDOWEVENT_ENTER:
+          case SDL_WINDOWEVENT_FOCUS_GAINED:
+            Mouse::instance().attach(g_pWindow);
             g_hasFocus = true;
             break;
-
-        case WA_INACTIVE:
-            if (g_isFullScreen)
-                ShowWindow(hWnd, SW_MINIMIZE);
+          case SDL_WINDOWEVENT_LEAVE:
+          case SDL_WINDOWEVENT_FOCUS_LOST:
             Mouse::instance().detach();
             g_hasFocus = false;
             break;
+          }
         }
-        break;
+      }
 
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-
-    case WM_SIZE:
-        g_windowWidth = static_cast<int>(LOWORD(lParam));
-        g_windowHeight = static_cast<int>(HIWORD(lParam));
-        break;
-
-    default:
-        Mouse::instance().handleMsg(hWnd, msg, wParam, lParam);
-        Keyboard::instance().handleMsg(hWnd, msg, wParam, lParam);
-        break;
+      UpdateFrame(GetElapsedTimeInSeconds());
+      RenderFrame();
+      SDL_GL_SwapWindow(g_pWindow);
     }
-
-    return DefWindowProc(hWnd, msg, wParam, lParam);
+  }
+  Cleanup();
+  SDL_Quit();
+  return EXIT_SUCCESS;
 }
 
-void ChangeCameraBehavior(Camera::CameraBehavior behavior)
-{
-    if (g_camera.getBehavior() == behavior)
-        return;
+float GetElapsedTimeInSeconds() {
+  static uint64_t lastTick = 0;
+  uint64_t currentTick = SDL_GetTicks64();
 
-    if (behavior == Camera::CAMERA_BEHAVIOR_ORBIT)
-    {
-        g_meshPosition = g_camera.getPosition();
-        g_meshOrientation = g_camera.getOrientation().inverse();
-    }
+  if(lastTick == 0) {
+    lastTick = currentTick;
+    return 0.0F;
+  }
 
-    g_camera.setBehavior(behavior);
+  uint64_t elapsedTicks = currentTick - lastTick;
+  lastTick = currentTick;
 
-    if (behavior == Camera::CAMERA_BEHAVIOR_ORBIT)
-        g_camera.rotate(0.0f, -30.0f, 0.0f);
+  return static_cast<float>(elapsedTicks) / 1000.0F;
 }
 
-void Cleanup()
-{
-    CleanupApp();
+void GetMovementDirection(glm::vec3 &direction) {
+  static bool moveForwardsPressed = false;
+  static bool moveBackwardsPressed = false;
+  static bool moveRightPressed = false;
+  static bool moveLeftPressed = false;
+  static bool moveUpPressed = false;
+  static bool moveDownPressed = false;
 
-    if (g_hDC)
-    {
-        if (g_hRC)
-        {
-            wglMakeCurrent(g_hDC, 0);
-            wglDeleteContext(g_hRC);
-            g_hRC = 0;
-        }
+  glm::vec3 velocity = g_camera.getCurrentVelocity();
+  Keyboard &keyboard = Keyboard::instance();
 
-        ReleaseDC(g_hWnd, g_hDC);
-        g_hDC = 0;
+  direction = {0.0F, 0.0F, 0.0F};
+
+  if(keyboard.keyDown(SDL_SCANCODE_W)) {
+    if(!moveForwardsPressed) {
+      moveForwardsPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
     }
+    direction.z += 1.0F;
+  } else {
+    moveForwardsPressed = false;
+  }
+
+  if(keyboard.keyDown(SDL_SCANCODE_S)) {
+    if(!moveBackwardsPressed) {
+      moveBackwardsPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0F);
+    }
+    direction.z -= 1.0F;
+  } else {
+    moveBackwardsPressed = false;
+  }
+
+  if(keyboard.keyDown(SDL_SCANCODE_D)) {
+    if(!moveRightPressed) {
+      moveRightPressed = true;
+      g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
+    }
+    direction.x += 1.0F;
+  } else {
+    moveRightPressed = false;
+  }
+
+  if(keyboard.keyDown(SDL_SCANCODE_A)) {
+    if(!moveLeftPressed) {
+      moveLeftPressed = true;
+      g_camera.setCurrentVelocity(0.0F, velocity.y, velocity.z);
+    }
+    direction.x -= 1.0F;
+  } else {
+    moveLeftPressed = false;
+  }
+
+  if(keyboard.keyDown(SDL_SCANCODE_E)) {
+    if(!moveUpPressed) {
+      moveUpPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
+    }
+    direction.y += 1.0F;
+  } else {
+    moveUpPressed = false;
+  }
+
+  if(keyboard.keyDown(SDL_SCANCODE_Q)) {
+    if(!moveDownPressed) {
+      moveDownPressed = true;
+      g_camera.setCurrentVelocity(velocity.x, 0.0F, velocity.z);
+    }
+    direction.y -= 1.0F;
+  } else {
+    moveDownPressed = false;
+  }
 }
 
-void CleanupApp()
-{
-    for (std::map<std::string, GLuint>::iterator i = g_modelTextures.begin(); i != g_modelTextures.end(); ++i)
-    {
-        GLuint texture = i->second;
-        glDeleteTextures(1, &texture);
-    }
+void ChangeCameraBehavior(Camera::CameraBehavior behavior) {
+  if(g_camera.getBehavior() == behavior)
+    return;
 
-    if (g_floorColorMapTexture)
-    {
-        glDeleteTextures(1, &g_floorColorMapTexture);
-        g_floorColorMapTexture = 0;
-    }
+  if(behavior == Camera::CAMERA_BEHAVIOR_ORBIT) {
+    g_meshPosition = g_camera.getPosition();
+    g_meshOrientation = glm::inverse(g_camera.getOrientation());
+  }
 
-    if (g_floorLightMapTexture)
-    {
-        glDeleteTextures(1, &g_floorLightMapTexture);
-        g_floorLightMapTexture = 0;
-    }
+  g_camera.setBehavior(behavior);
 
-    if (g_floorDisplayList)
-    {
-        glDeleteLists(g_floorDisplayList, 1);
-        g_floorDisplayList = 0;
-    }
-
-    g_font.destroy();
+  if(behavior == Camera::CAMERA_BEHAVIOR_ORBIT)
+    g_camera.rotate(0.0F, -30.0F, 0.0F);
 }
 
-HWND CreateAppWindow(const WNDCLASSEX &wcl, const char *pszTitle)
-{
-    // Create a window that is centered on the desktop. It's exactly 1/4 the
-    // size of the desktop. Don't allow it to be resized.
-
-    DWORD wndExStyle = WS_EX_OVERLAPPEDWINDOW;
-    DWORD wndStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-                     WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-
-    HWND hWnd = CreateWindowEx(wndExStyle, wcl.lpszClassName, pszTitle,
-                    wndStyle, 0, 0, 0, 0, 0, 0, wcl.hInstance, 0);
-
-    if (hWnd)
-    {
-        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        int halfScreenWidth = screenWidth / 2;
-        int halfScreenHeight = screenHeight / 2;
-        int left = (screenWidth - halfScreenWidth) / 2;
-        int top = (screenHeight - halfScreenHeight) / 2;
-        RECT rc = {0};
-
-        SetRect(&rc, left, top, left + halfScreenWidth, top + halfScreenHeight);
-        AdjustWindowRectEx(&rc, wndStyle, FALSE, wndExStyle);
-        MoveWindow(hWnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
-
-        GetClientRect(hWnd, &rc);
-        g_windowWidth = rc.right - rc.left;
-        g_windowHeight = rc.bottom - rc.top;
-    }
-
-    return hWnd;
+bool Init() {
+  try {
+    InitGL();
+    InitApp();
+  } catch(const std::exception &e) {
+    const auto errorMessage = fmt::format("Application initialization failed!\n\n{}", e.what());
+    Log(errorMessage.c_str());
+    return false;
+  }
+  return true;
 }
 
-void EnableVerticalSync(bool enableVerticalSync)
-{
-    // WGL_EXT_swap_control.
+void InitApp() {
+  InitModel();
 
-    typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
+  if(!(g_floorColorMapTexture = LoadTexture("floor_color_map.tga"))) {
+    throw std::runtime_error("Failed to load texture: floor_color_map.tga");
+  }
 
-    static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
-        reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(
-        wglGetProcAddress("wglSwapIntervalEXT"));
+  if(!(g_floorLightMapTexture = LoadTexture("floor_light_map.tga"))) {
+    throw std::runtime_error("Failed to load texture: floor_light_map.tga");
+  }
 
-    if (wglSwapIntervalEXT)
-    {
-        wglSwapIntervalEXT(enableVerticalSync ? 1 : 0);
-        g_enableVerticalSync = enableVerticalSync;
-    }
+  InitCamera();
+
+  createFloorBuffers();
+  createUniformBuffers();
+  createFloorProgram();
+
+  if(g_modelLoaded) {
+    createModelBuffers();
+    createModelProgram();
+  }
 }
 
-bool ExtensionSupported(const char *pszExtensionName)
-{
-    static const char *pszGLExtensions = 0;
-    static const char *pszWGLExtensions = 0;
+void InitCamera() {
+  g_camera.perspective(
+      CAMERA_FOVX, static_cast<float>(g_windowResolution.x) / static_cast<float>(g_windowResolution.y), CAMERA_ZNEAR, CAMERA_ZFAR);
 
-    if (!pszGLExtensions)
-        pszGLExtensions = reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS));
+  float cameraOffset = g_modelLoaded ? g_model.getHeight() * 0.5F : 1.0F;
 
-    if (!pszWGLExtensions)
-    {
-        // WGL_ARB_extensions_string.
+  g_camera.setPosition({0.0F, cameraOffset, 0.0F});
+  g_camera.setOrbitMinZoom(CAMERA_ZOOM_MIN);
+  g_camera.setOrbitMaxZoom(CAMERA_ZOOM_MAX);
+  g_camera.setOrbitOffsetDistance(CAMERA_ZOOM_MIN + (CAMERA_ZOOM_MAX - CAMERA_ZOOM_MIN) * 0.3F);
 
-        typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC)(HDC);
+  g_camera.setAcceleration(CAMERA_ACCELERATION);
+  g_camera.setVelocity(CAMERA_VELOCITY);
 
-        PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB =
-            reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(
-            wglGetProcAddress("wglGetExtensionsStringARB"));
+  ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_ORBIT);
 
-        if (wglGetExtensionsStringARB)
-            pszWGLExtensions = wglGetExtensionsStringARB(g_hDC);
-    }
+  Mouse::instance().hideCursor(true);
+  Mouse::instance().moveToWindowCenter();
 
-    if (!strstr(pszGLExtensions, pszExtensionName))
-    {
-        if (!strstr(pszWGLExtensions, pszExtensionName))
-            return false;
-    }
-
-    return true;
+  g_cameraBoundsMax = {FLOOR_WIDTH / 2.0F, 4.0F, FLOOR_HEIGHT / 2.0F};
+  g_cameraBoundsMin = {-FLOOR_WIDTH / 2.0F, cameraOffset, -FLOOR_HEIGHT / 2.0F};
 }
 
-float GetElapsedTimeInSeconds()
-{
-    // Returns the elapsed time (in seconds) since the last time this function
-    // was called. This elaborate setup is to guard against large spikes in
-    // the time returned by QueryPerformanceCounter().
-
-    static const int MAX_SAMPLE_COUNT = 50;
-
-    static float frameTimes[MAX_SAMPLE_COUNT];
-    static float timeScale = 0.0f;
-    static float actualElapsedTimeSec = 0.0f;
-    static INT64 freq = 0;
-    static INT64 lastTime = 0;
-    static int sampleCount = 0;
-    static bool initialized = false;
-
-    INT64 time = 0;
-    float elapsedTimeSec = 0.0f;
-
-    if (!initialized)
-    {
-        initialized = true;
-        QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER*>(&freq));
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&lastTime));
-        timeScale = 1.0f / freq;
-    }
-
-    QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&time));
-    elapsedTimeSec = (time - lastTime) * timeScale;
-    lastTime = time;
-
-    if (fabsf(elapsedTimeSec - actualElapsedTimeSec) < 1.0f)
-    {
-        memmove(&frameTimes[1], frameTimes, sizeof(frameTimes) - sizeof(frameTimes[0]));
-        frameTimes[0] = elapsedTimeSec;
-
-        if (sampleCount < MAX_SAMPLE_COUNT)
-            ++sampleCount;
-    }
-
-    actualElapsedTimeSec = 0.0f;
-
-    for (int i = 0; i < sampleCount; ++i)
-        actualElapsedTimeSec += frameTimes[i];
-
-    if (sampleCount > 0)
-        actualElapsedTimeSec /= sampleCount;
-
-    return actualElapsedTimeSec;
+void InitModel() {
+  if(g_model.import("content/models/bigship1.obj")) {
+    g_model.normalize();
+    g_modelLoaded = true;
+  } else {
+    fmt::print(fg(fmt::color::yellow), "WARNING: bigship1.obj not found. Orbit mode will show no model.\n");
+    g_modelLoaded = false;
+  }
 }
 
-void GetMovementDirection(Vector3 &direction)
-{
-    static bool moveForwardsPressed = false;
-    static bool moveBackwardsPressed = false;
-    static bool moveRightPressed = false;
-    static bool moveLeftPressed = false;
-    static bool moveUpPressed = false;
-    static bool moveDownPressed = false;
+void InitGL() {
+  if(SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8) < 0) {
+    Log("Failed to set the Red size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8) < 0) {
+    Log("Failed to set the green size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8) < 0) {
+    Log("Failed to set the blue size to 8");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, 32) < 0) {
+    Log("Failed to set the buffer size to 32");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16) < 0) {
+    Log("Failed to set the Depth size to 16");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1) < 0) {
+    Log("Failed to set the DoubleBuffer");
+  }
 
-    Vector3 velocity = g_camera.getCurrentVelocity();
-    Keyboard &keyboard = Keyboard::instance();
+#ifdef OPENGL_DEBUG
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG) < 0) {
+    Log("Failed to set OpenGL debug flag");
+  }
+#endif
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE) < 0) {
+    Log("Failed to set core context");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0) {
+    Log("Failed to set major version to 4");
+  }
+  if(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6) < 0) {
+    Log("Failed to set minor version to 6");
+  }
 
-    direction.set(0.0f, 0.0f, 0.0f);
+  g_glcontext = SDL_GL_CreateContext(g_pWindow);
+  if(nullptr == g_glcontext) {
+    throw std::runtime_error("Failed to create OpenGL Context");
+  }
+  SDL_GL_MakeCurrent(g_pWindow, g_glcontext);
 
-    if (keyboard.keyDown(Keyboard::KEY_W))
-    {
-        if (!moveForwardsPressed)
-        {
-            moveForwardsPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
-        }
+  SDL_GL_SetSwapInterval(1);
 
-        direction.z += 1.0f;
-    }
-    else
-    {
-        moveForwardsPressed = false;
-    }
+  glbinding::initialize([](const char *name) { return reinterpret_cast<glbinding::ProcAddress>(SDL_GL_GetProcAddress(name)); });
 
-    if (keyboard.keyDown(Keyboard::KEY_S))
-    {
-        if (!moveBackwardsPressed)
-        {
-            moveBackwardsPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, velocity.y, 0.0f);
-        }
+#ifdef OPENGL_DEBUG
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback(
+      [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam) {},
+      nullptr);
+#endif
 
-        direction.z -= 1.0f;
-    }
-    else
-    {
-        moveBackwardsPressed = false;
-    }
+  glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotrophy);
 
-    if (keyboard.keyDown(Keyboard::KEY_D))
-    {
-        if (!moveRightPressed)
-        {
-            moveRightPressed = true;
-            g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
-        }
-
-        direction.x += 1.0f;
-    }
-    else
-    {
-        moveRightPressed = false;
-    }
-
-    if (keyboard.keyDown(Keyboard::KEY_A))
-    {
-        if (!moveLeftPressed)
-        {
-            moveLeftPressed = true;
-            g_camera.setCurrentVelocity(0.0f, velocity.y, velocity.z);
-        }
-
-        direction.x -= 1.0f;
-    }
-    else
-    {
-        moveLeftPressed = false;
-    }
-
-    if (keyboard.keyDown(Keyboard::KEY_E))
-    {
-        if (!moveUpPressed)
-        {
-            moveUpPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
-        }
-
-        direction.y += 1.0f;
-    }
-    else
-    {
-        moveUpPressed = false;
-    }
-
-    if (keyboard.keyDown(Keyboard::KEY_Q))
-    {
-        if (!moveDownPressed)
-        {
-            moveDownPressed = true;
-            g_camera.setCurrentVelocity(velocity.x, 0.0f, velocity.z);
-        }
-
-        direction.y -= 1.0f;
-    }
-    else
-    {
-        moveDownPressed = false;
-    }
+  InitImgui();
 }
 
-bool Init()
-{
-    try
-    {
-        InitGL();
-
-        if (!ExtensionSupported("GL_ARB_multitexture"))
-        {
-            Log("This application required GL_ARB_multitexture support.");
-            return false;
-        }
-
-        InitApp();
-    }
-    catch (const std::exception &e)
-    {
-        std::ostringstream msg;
-
-        msg << "Application initialization failed!" << std::endl << std::endl;
-        msg << e.what();
-
-        Log(msg.str().c_str());
-        return false;
-    }
-
-    return true;
+void InitImgui() {
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+  ImGui_ImplSDL2_InitForOpenGL(g_pWindow, g_glcontext);
+  ImGui_ImplOpenGL3_Init();
 }
 
-void InitApp()
-{
-    InitModel();
-    InitFloor();
-    InitFont();
-    InitCamera();
+GLuint LoadTexture(const char *pszFilename) {
+  return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_REPEAT);
 }
 
-void InitCamera()
-{
-    g_camera.perspective(CAMERA_FOVX,
-        static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-        CAMERA_ZNEAR, CAMERA_ZFAR);
+GLuint LoadTexture(const char *pszFilename, GLenum magFilter, GLenum minFilter, GLenum wrapS, GLenum wrapT) {
+  GLuint id = 0;
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  stbi_set_flip_vertically_on_load(1);
+  void *pImage = stbi_load(pszFilename, &width, &height, &channels, 4);
 
-    float cameraOffset = g_model.getHeight() * 0.5f;
+  if(pImage != nullptr) {
+    glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-    g_camera.setPosition(Vector3(0.0f, cameraOffset, 0.0f));
-    g_camera.setOrbitMinZoom(CAMERA_ZOOM_MIN);
-    g_camera.setOrbitMaxZoom(CAMERA_ZOOM_MAX);
-    g_camera.setOrbitOffsetDistance(CAMERA_ZOOM_MIN + (CAMERA_ZOOM_MAX - CAMERA_ZOOM_MIN) * 0.3f);
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, magFilter);
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, wrapS);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, wrapT);
 
-    g_camera.setAcceleration(CAMERA_ACCELERATION);
-    g_camera.setVelocity(CAMERA_VELOCITY);
+    glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+    glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pImage);
+    if(minFilter == GL_LINEAR_MIPMAP_LINEAR) {
+      glGenerateTextureMipmap(id);
+    }
+    glTextureParameteri(id, GL_TEXTURE_MAX_ANISOTROPY, g_maxAnisotrophy);
 
+    stbi_image_free(pImage);
+  }
+
+  return id;
+}
+
+void Log(const char *pszMessage) { fmt::print("{}\n", pszMessage); }
+
+void PerformCameraCollisionDetection() {
+  if(g_camera.getBehavior() != Camera::CAMERA_BEHAVIOR_ORBIT) {
+    const glm::vec3 &pos = g_camera.getPosition();
+    glm::vec3 newPos(pos);
+
+    if(pos.x > g_cameraBoundsMax.x)
+      newPos.x = g_cameraBoundsMax.x;
+    if(pos.x < g_cameraBoundsMin.x)
+      newPos.x = g_cameraBoundsMin.x;
+    if(pos.y > g_cameraBoundsMax.y)
+      newPos.y = g_cameraBoundsMax.y;
+    if(pos.y < g_cameraBoundsMin.y)
+      newPos.y = g_cameraBoundsMin.y;
+    if(pos.z > g_cameraBoundsMax.z)
+      newPos.z = g_cameraBoundsMax.z;
+    if(pos.z < g_cameraBoundsMin.z)
+      newPos.z = g_cameraBoundsMin.z;
+
+    g_camera.setPosition(newPos);
+  }
+}
+
+void ProcessUserInput() {
+  Keyboard &keyboard = Keyboard::instance();
+  Mouse &mouse = Mouse::instance();
+
+  if(keyboard.keyDown(SDL_SCANCODE_LALT) || keyboard.keyDown(SDL_SCANCODE_RALT)) {
+    if(keyboard.keyPressed(SDL_SCANCODE_RETURN))
+      ToggleFullScreen();
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_BACKSPACE)) {
+    switch(g_camera.getBehavior()) {
+    default: break;
+    case Camera::CAMERA_BEHAVIOR_FLIGHT: g_camera.undoRoll(); break;
+    case Camera::CAMERA_BEHAVIOR_ORBIT:
+      if(!g_camera.preferTargetYAxisOrbiting())
+        g_camera.undoRoll();
+      break;
+    }
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_SPACE)) {
+    if(g_camera.getBehavior() == Camera::CAMERA_BEHAVIOR_ORBIT)
+      g_camera.setPreferTargetYAxisOrbiting(!g_camera.preferTargetYAxisOrbiting());
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_1))
+    ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_FIRST_PERSON);
+
+  if(keyboard.keyPressed(SDL_SCANCODE_2))
+    ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_SPECTATOR);
+
+  if(keyboard.keyPressed(SDL_SCANCODE_3))
+    ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_FLIGHT);
+
+  if(keyboard.keyPressed(SDL_SCANCODE_4))
     ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_ORBIT);
 
-    Mouse::instance().hideCursor(true);
-    Mouse::instance().setPosition(g_windowWidth / 2, g_windowHeight / 2);
+  if(keyboard.keyPressed(SDL_SCANCODE_H))
+    g_displayHelp = !g_displayHelp;
 
-    g_cameraBoundsMax.set(FLOOR_WIDTH / 2.0f, 4.0f, FLOOR_HEIGHT / 2.0f);
-    g_cameraBoundsMin.set(-FLOOR_WIDTH / 2.0f, cameraOffset, -FLOOR_HEIGHT / 2.0f);
+  if(keyboard.keyPressed(SDL_SCANCODE_EQUALS) || keyboard.keyPressed(SDL_SCANCODE_KP_PLUS)) {
+    g_camera.setRotationSpeed(g_camera.getRotationSpeed() + 0.01F);
+    if(g_camera.getRotationSpeed() > 1.0F)
+      g_camera.setRotationSpeed(1.0F);
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_MINUS) || keyboard.keyPressed(SDL_SCANCODE_KP_MINUS)) {
+    g_camera.setRotationSpeed(g_camera.getRotationSpeed() - 0.01F);
+    if(g_camera.getRotationSpeed() <= 0.0F)
+      g_camera.setRotationSpeed(0.01F);
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_PERIOD)) {
+    mouse.setWeightModifier(mouse.weightModifier() + 0.1F);
+    if(mouse.weightModifier() > 1.0F)
+      mouse.setWeightModifier(1.0F);
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_COMMA)) {
+    mouse.setWeightModifier(mouse.weightModifier() - 0.1F);
+    if(mouse.weightModifier() < 0.0F)
+      mouse.setWeightModifier(0.0F);
+  }
+
+  if(keyboard.keyPressed(SDL_SCANCODE_M))
+    mouse.smoothMouse(!mouse.isMouseSmoothing());
+
+  if(keyboard.keyPressed(SDL_SCANCODE_V)) {
+    g_enableVerticalSync = !g_enableVerticalSync;
+    SDL_GL_SetSwapInterval(g_enableVerticalSync ? 1 : 0);
+  }
 }
 
-void InitFloor()
-{
-    if (!(g_floorColorMapTexture = LoadTexture("Content/Textures/floor_color_map.tga")))
-        throw std::runtime_error("Failed to load floor color map texture.");
+void RenderFloor() {
+  glUseProgram(g_floorProgram);
 
-    if (!(g_floorLightMapTexture = LoadTexture("Content/Textures/floor_light_map.tga")))
-        throw std::runtime_error("Failed to load floor light map texture.");
+  constexpr auto FloorTextureId = 0;
+  glBindTextureUnit(FloorTextureId, g_floorColorMapTexture);
+  glUniform1i(g_uFloorTexture0Location, FloorTextureId);
 
-    g_floorDisplayList = glGenLists(1);
-    glNewList(g_floorDisplayList, GL_COMPILE);
-    glBegin(GL_QUADS);
+  constexpr auto FloorLightTextureId = 1;
+  glBindTextureUnit(FloorLightTextureId, g_floorLightMapTexture);
+  glUniform1i(g_uFloorTexture1Location, FloorLightTextureId);
 
-    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.0f, 0.0f);
-    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 0.0f);
-    glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+  constexpr auto PositionID = 0;
+  constexpr auto UV1ID = 1;
+  constexpr auto UV2ID = 2;
 
-    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, 0.0f);
-    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 0.0f);
-    glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, FLOOR_HEIGHT * 0.5f);
+  glBindVertexArray(g_floorVAO);
+  glBindVertexBuffer(0, g_floorVBO, 0, sizeof(float) * 7);
 
-    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, FLOOR_TILE_S, FLOOR_TILE_T);
-    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 1.0f, 1.0f);
-    glVertex3f(FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
+  glEnableVertexAttribArray(PositionID);
+  glEnableVertexAttribArray(UV1ID);
+  glEnableVertexAttribArray(UV2ID);
 
-    glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0.00f, FLOOR_TILE_T);
-    glMultiTexCoord2fARB(GL_TEXTURE1_ARB, 0.0f, 1.0f);
-    glVertex3f(-FLOOR_WIDTH * 0.5f, 0.0f, -FLOOR_HEIGHT * 0.5f);
+  const auto offset1 = sizeof(glm::vec3);
+  const auto offset2 = (sizeof(glm::vec3) + sizeof(glm::vec2));
 
-    glEnd();
-    glEndList();
+  glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, 0);
+  glVertexAttribFormat(UV1ID, 2, GL_FLOAT, GL_FALSE, offset1);
+  glVertexAttribFormat(UV2ID, 2, GL_FLOAT, GL_FALSE, offset2);
+
+  glVertexAttribBinding(PositionID, 0);
+  glVertexAttribBinding(UV1ID, 0);
+  glVertexAttribBinding(UV2ID, 0);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_floorEBO);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
 }
 
-void InitFont()
-{
-    if (!g_font.create("Arial", 9, GLFont::BOLD))
-        throw std::runtime_error("Failed to create font.");
+void RenderModel() {
+  if(!g_modelLoaded)
+    return;
+
+  glUseProgram(g_modelProgram);
+
+  glm::mat4 modelMatrix = glm::mat4_cast(g_meshOrientation);
+  modelMatrix[3] = glm::vec4(g_meshPosition, 1.0F);
+
+  const auto &projection = g_camera.getProjectionMatrix();
+  const auto &view = g_camera.getViewMatrix();
+  const auto modelMVP = projection * view * modelMatrix;
+
+  glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
+  glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(modelMVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+  glUniformMatrix4fv(g_uModelMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+
+  glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelMatrix)));
+  glUniformMatrix3fv(g_uNormalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+  const glm::vec3 &cameraPos = g_camera.getPosition();
+  glUniform3f(g_uLightPosLocation, cameraPos.x, cameraPos.y, cameraPos.z);
+  glUniform3f(g_uCameraPosLocation, cameraPos.x, cameraPos.y, cameraPos.z);
+
+  glBindVertexArray(g_modelVAO);
+
+  for(int i = 0; i < g_model.getNumberOfMeshes(); ++i) {
+    const ModelOBJ::Mesh &mesh = g_model.getMesh(i);
+    const ModelOBJ::Material &material = g_model.getMaterial(mesh.materialIndex);
+
+    glUniform4fv(g_uMatAmbientLocation, 1, material.ambient);
+    glUniform4fv(g_uMatDiffuseLocation, 1, material.diffuse);
+    glUniform4fv(g_uMatSpecularLocation, 1, material.specular);
+    glUniform1f(g_uMatShininessLocation, material.shininess * 128.0F);
+
+    glDrawElements(GL_TRIANGLES, mesh.triangleCount * 3, GL_UNSIGNED_INT,
+                   reinterpret_cast<const void *>(static_cast<uintptr_t>(mesh.startIndex) * sizeof(int)));
+  }
 }
 
-void InitGL()
-{
-    if (!(g_hDC = GetDC(g_hWnd)))
-        throw std::runtime_error("GetDC() failed.");
+void RenderFrame() {
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL2_NewFrame(g_pWindow);
+  ImGui::NewFrame();
 
-    int pf = 0;
-    PIXELFORMATDESCRIPTOR pfd = {0};
-    OSVERSIONINFO osvi = {0};
+  { RenderText(); }
+  ImGui::Render();
 
-    pfd.nSize = sizeof(pfd);
-    pfd.nVersion = 1;
-    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 24;
-    pfd.cDepthBits = 16;
-    pfd.iLayerType = PFD_MAIN_PLANE;
+  glViewport(0, 0, g_windowResolution.x, g_windowResolution.y);
+  glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
 
-    if (!GetVersionEx(&osvi))
-        throw std::runtime_error("GetVersionEx() failed.");
+  if(g_camera.getBehavior() == Camera::CAMERA_BEHAVIOR_ORBIT && g_modelLoaded) {
+    RenderModel();
+  }
 
-    // When running under Windows Vista or later support desktop composition.
+  const auto &projection = g_camera.getProjectionMatrix();
+  const auto &view = g_camera.getViewMatrix();
+  const auto floorMVP = projection * view;
 
-    if (osvi.dwMajorVersion > 6 || (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion >= 0))
-        pfd.dwFlags |=  PFD_SUPPORT_COMPOSITION;
+  glBindBuffer(GL_UNIFORM_BUFFER, g_UBO);
+  glBindBufferBase(GL_UNIFORM_BUFFER, MATRICES_BINDING_POINT, g_UBO);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(floorMVP));
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-    ChooseBestMultiSampleAntiAliasingPixelFormat(pf, g_msaaSamples);
+  RenderFloor();
 
-    if (!pf)
-        pf = ChoosePixelFormat(g_hDC, &pfd);
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
 
-    if (!SetPixelFormat(g_hDC, pf, &pfd))
-        throw std::runtime_error("SetPixelFormat() failed.");
+void RenderText() {
+  std::ostringstream output;
 
-    if (!(g_hRC = wglCreateContext(g_hDC)))
-        throw std::runtime_error("wglCreateContext() failed.");
+  if(g_displayHelp) {
+    output << "Press 1 to switch to first person behavior" << std::endl
+           << "Press 2 to switch to spectator behavior" << std::endl
+           << "Press 3 to switch to flight behavior" << std::endl
+           << "Press 4 to switch to orbit behavior" << std::endl
+           << std::endl
+           << "First Person and Spectator behaviors" << std::endl
+           << "  Press W and S to move forwards and backwards" << std::endl
+           << "  Press A and D to strafe left and right" << std::endl
+           << "  Press E and Q to move up and down" << std::endl
+           << "  Move mouse to free look" << std::endl
+           << std::endl
+           << "Flight behavior" << std::endl
+           << "  Press W and S to move forwards and backwards" << std::endl
+           << "  Press A and D to yaw left and right" << std::endl
+           << "  Press E and Q to move up and down" << std::endl
+           << "  Move mouse up and down to change pitch" << std::endl
+           << "  Move mouse left and right to change roll" << std::endl
+           << std::endl
+           << "Orbit behavior" << std::endl
+           << "  Press SPACE to enable/disable target Y axis orbiting" << std::endl
+           << "  Move mouse to orbit the model" << std::endl
+           << "  Mouse wheel to zoom in and out" << std::endl
+           << std::endl
+           << "Press M to enable/disable mouse smoothing" << std::endl
+           << "Press V to enable/disable vertical sync" << std::endl
+           << "Press + and - to change camera rotation speed" << std::endl
+           << "Press , and . to change mouse sensitivity" << std::endl
+           << "Press BACKSPACE or middle mouse button to level camera" << std::endl
+           << "Press ALT and ENTER to toggle full screen" << std::endl
+           << "Press ESC to exit" << std::endl
+           << std::endl
+           << "Press H to hide help";
+  } else {
+    const char *pszCurrentBehavior = nullptr;
+    const char *pszOrbitStyle = nullptr;
+    const Mouse &mouse = Mouse::instance();
 
-    if (!wglMakeCurrent(g_hDC, g_hRC))
-        throw std::runtime_error("wglMakeCurrent() failed.");
+    switch(g_camera.getBehavior()) {
+    case Camera::CAMERA_BEHAVIOR_FIRST_PERSON: pszCurrentBehavior = "First Person"; break;
+    case Camera::CAMERA_BEHAVIOR_SPECTATOR: pszCurrentBehavior = "Spectator"; break;
+    case Camera::CAMERA_BEHAVIOR_FLIGHT: pszCurrentBehavior = "Flight"; break;
+    case Camera::CAMERA_BEHAVIOR_ORBIT: pszCurrentBehavior = "Orbit"; break;
+    default: pszCurrentBehavior = "Unknown"; break;
+    }
 
-    EnableVerticalSync(false);
-
-    // Check for GL_EXT_texture_filter_anisotropic support.
-
-    if (ExtensionSupported("GL_EXT_texture_filter_anisotropic"))
-        glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &g_maxAnisotrophy);
+    if(g_camera.preferTargetYAxisOrbiting())
+      pszOrbitStyle = "Target Y axis";
     else
-        g_maxAnisotrophy = 1;
+      pszOrbitStyle = "Free";
+
+    output.setf(std::ios::fixed, std::ios::floatfield);
+    output << std::setprecision(2);
+
+    output << "FPS: " << g_framesPerSecond << std::endl
+           << "Multisample anti-aliasing: " << g_msaaSamples << "x" << std::endl
+           << "Anisotropic filtering: " << g_maxAnisotrophy << "x" << std::endl
+           << "Vertical sync: " << (g_enableVerticalSync ? "enabled" : "disabled") << std::endl
+           << std::endl
+           << "Camera" << std::endl
+           << "  Position:" << " x:" << g_camera.getPosition().x << " y:" << g_camera.getPosition().y
+           << " z:" << g_camera.getPosition().z << std::endl
+           << "  Velocity:" << " x:" << g_camera.getCurrentVelocity().x << " y:" << g_camera.getCurrentVelocity().y
+           << " z:" << g_camera.getCurrentVelocity().z << std::endl
+           << "  Behavior: " << pszCurrentBehavior << std::endl
+           << "  Rotation speed: " << g_camera.getRotationSpeed() << std::endl
+           << "  Orbit style: " << pszOrbitStyle << std::endl
+           << std::endl
+           << "Mouse" << std::endl
+           << "  Smoothing: " << (mouse.isMouseSmoothing() ? "enabled" : "disabled") << std::endl
+           << "  Sensitivity: " << mouse.weightModifier() << std::endl
+           << std::endl
+           << "Press H to display help";
+  }
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowResolution.x) / 2.0F, static_cast<float>(g_windowResolution.y)));
+  ImGui::Begin("Text", nullptr,
+               ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
+  ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", output.str().c_str());
+  ImGui::End();
 }
 
-void InitModel()
-{
-    if (g_model.import("Content/Models/bigship1.obj"))
-    {
-        g_model.normalize();
+void UpdateCamera(float elapsedTimeSec) {
+  float dx = 0.0F;
+  float dy = 0.0F;
+  float dz = 0.0F;
+  glm::vec3 direction;
+  Mouse &mouse = Mouse::instance();
 
-        for (int i = 0; i < g_model.getNumberOfMaterials(); ++i)
-        {
-            const ModelOBJ::Material &material = g_model.getMaterial(i);
+  GetMovementDirection(direction);
 
-            if (material.colorMapFilename.empty())
-                continue;
+  switch(g_camera.getBehavior()) {
+  default: break;
 
-            std::string filename = "Content/Textures/" + material.colorMapFilename;
-            GLuint textureId = LoadTexture(filename.c_str());
+  case Camera::CAMERA_BEHAVIOR_FIRST_PERSON:
+  case Camera::CAMERA_BEHAVIOR_SPECTATOR:
+    dx = -mouse.xDistanceFromWindowCenter();
+    dy = -mouse.yDistanceFromWindowCenter();
 
-            if (!textureId)
-                throw std::runtime_error("Failed to load texture: \"" + filename + "\"");
-            else
-                g_modelTextures[material.colorMapFilename] = textureId;
-        }
+    g_camera.rotateSmoothly(dx, dy, 0.0F);
+    g_camera.updatePosition(direction, elapsedTimeSec);
+    break;
+
+  case Camera::CAMERA_BEHAVIOR_FLIGHT:
+    dy = mouse.yDistanceFromWindowCenter();
+    dz = -mouse.xDistanceFromWindowCenter();
+
+    g_camera.rotateSmoothly(0.0F, dy, dz);
+
+    if((dx = -direction.x * CAMERA_SPEED_FLIGHT_YAW * elapsedTimeSec) != 0.0F)
+      g_camera.rotate(dx, 0.0F, 0.0F);
+
+    direction.x = 0.0F;
+    g_camera.updatePosition(direction, elapsedTimeSec);
+    break;
+
+  case Camera::CAMERA_BEHAVIOR_ORBIT:
+    dx = mouse.xDistanceFromWindowCenter();
+    dy = mouse.yDistanceFromWindowCenter();
+
+    g_camera.rotateSmoothly(dx, dy, 0.0F);
+
+    if(!g_camera.preferTargetYAxisOrbiting()) {
+      if((dz = direction.x * CAMERA_SPEED_ORBIT_ROLL * elapsedTimeSec) != 0.0F)
+        g_camera.rotate(0.0F, 0.0F, dz);
     }
-    else
-    {
-        throw std::runtime_error("Failed to load model.");
-    }
+
+    if((dz = -mouse.wheelPos()) != 0.0F)
+      g_camera.zoom(dz, g_camera.getOrbitMinZoom(), g_camera.getOrbitMaxZoom());
+
+    break;
+  }
+
+  mouse.moveToWindowCenter();
+
+  if(mouse.buttonPressed(Mouse::BUTTON_MIDDLE))
+    g_camera.undoRoll();
+
+  PerformCameraCollisionDetection();
 }
 
-GLuint LoadTexture(const char *pszFilename)
-{
-    return LoadTexture(pszFilename, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_REPEAT);
+void UpdateFrame(float elapsedTimeSec) {
+  UpdateFrameRate(elapsedTimeSec);
+
+  Mouse::instance().update();
+  Keyboard::instance().update();
+
+  UpdateCamera(elapsedTimeSec);
+  ProcessUserInput();
 }
 
-GLuint LoadTexture(const char *pszFilename, GLint magFilter, GLint minFilter,
-                   GLint wrapS, GLint wrapT)
-{
-    GLuint id = 0;
-    Bitmap bitmap;
+void UpdateFrameRate(float elapsedTimeSec) {
+  static float accumTimeSec = 0.0F;
+  static int frames = 0;
 
-    if (bitmap.loadPicture(pszFilename))
-    {
-        // The Bitmap class loads images and orients them top-down.
-        // OpenGL expects bitmap images to be oriented bottom-up.
-        bitmap.flipVertical();
+  accumTimeSec += elapsedTimeSec;
 
-        glGenTextures(1, &id);
-        glBindTexture(GL_TEXTURE_2D, id);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
-
-        if (g_maxAnisotrophy > 1)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, g_maxAnisotrophy);
-
-        gluBuild2DMipmaps(GL_TEXTURE_2D, 4, bitmap.width, bitmap.height,
-            GL_BGRA_EXT, GL_UNSIGNED_BYTE, bitmap.getPixels());
-    }
-
-    return id;
+  if(accumTimeSec > 1.0F) {
+    g_framesPerSecond = frames;
+    frames = 0;
+    accumTimeSec = 0.0F;
+  } else {
+    ++frames;
+  }
 }
 
-void Log(const char *pszMessage)
-{
-    bool cursorWasHidden = !Mouse::instance().cursorIsVisible();
-
-    if (cursorWasHidden)
-        Mouse::instance().hideCursor(false);
-
-    MessageBox(0, pszMessage, "Error", MB_ICONSTOP);
-
-    if (cursorWasHidden)
-        Mouse::instance().hideCursor(true);
+void ToggleFullScreen() {
+  // TODO(Hussein): Implement me
 }
 
-void PerformCameraCollisionDetection()
-{
-    // Very simple collision detection to prevent the first person, spectator
-    // and flight cameras from moving too far outside of the scene. We don't
-    // worry about the orbiting camera here because the min and max zoom
-    // constants already limits how far the orbiting camera can zoom in/out
-    // of the scene.
+void createFloorBuffers() {
+  glGenVertexArrays(1, &g_floorVAO);
+  glBindVertexArray(g_floorVAO);
 
-    if (g_camera.getBehavior() != Camera::CAMERA_BEHAVIOR_ORBIT)
-    {
-        const Vector3 &pos = g_camera.getPosition();
-        Vector3 newPos(pos);
+  // clang-format off
+  constexpr std::array<uint16_t, 6> elements = {
+      3, 1, 0,
+      3, 2, 1
+  };
+  constexpr std::array<float, 4 * 7> vertices = {
+    -FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, 0.0F,         0.0F,         0.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F, FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, 0.0F,         1.0F, 0.0F,
+     FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, FLOOR_TILE_S, FLOOR_TILE_T, 1.0F, 1.0F,
+    -FLOOR_WIDTH * 0.5F, 0.0F,-FLOOR_HEIGHT * 0.5F, 0.00F,        FLOOR_TILE_T, 0.0F, 1.0F,
+  };
+  // clang-format on
 
-        if (pos.x > g_cameraBoundsMax.x)
-            newPos.x = g_cameraBoundsMax.x;
+  constexpr auto verticesSize = vertices.size() * sizeof(float);
 
-        if (pos.x < g_cameraBoundsMin.x)
-            newPos.x = g_cameraBoundsMin.x;
+  glCreateBuffers(1, &g_floorVBO);
+  glNamedBufferStorage(g_floorVBO, verticesSize, vertices.data(), GL_DYNAMIC_STORAGE_BIT);
 
-        if (pos.y > g_cameraBoundsMax.y)
-            newPos.y = g_cameraBoundsMax.y;
-
-        if (pos.y < g_cameraBoundsMin.y)
-            newPos.y = g_cameraBoundsMin.y;
-
-        if (pos.z > g_cameraBoundsMax.z)
-            newPos.z = g_cameraBoundsMax.z;
-
-        if (pos.z < g_cameraBoundsMin.z)
-            newPos.z = g_cameraBoundsMin.z;
-
-        g_camera.setPosition(newPos);
-    }
+  constexpr auto elementsSize = static_cast<GLsizeiptr>(elements.size() * sizeof(uint16_t));
+  glCreateBuffers(1, &g_floorEBO);
+  glNamedBufferStorage(g_floorEBO, elementsSize, elements.data(), GL_DYNAMIC_STORAGE_BIT);
 }
 
-void ProcessUserInput()
-{
-    Keyboard &keyboard = Keyboard::instance();
-    Mouse &mouse = Mouse::instance();
+void createModelBuffers() {
+  glGenVertexArrays(1, &g_modelVAO);
+  glBindVertexArray(g_modelVAO);
 
-    if (keyboard.keyPressed(Keyboard::KEY_ESCAPE))
-        PostMessage(g_hWnd, WM_CLOSE, 0, 0);
+  const auto vertexCount = g_model.getNumberOfVertices();
+  const auto vertexSize = g_model.getVertexSize();
+  const auto *vertexData = g_model.getVertexBuffer();
 
-    if (keyboard.keyDown(Keyboard::KEY_LALT) || keyboard.keyDown(Keyboard::KEY_RALT))
-    {
-        if (keyboard.keyPressed(Keyboard::KEY_ENTER))
-            ToggleFullScreen();
-    }
+  glCreateBuffers(1, &g_modelVBO);
+  glNamedBufferStorage(g_modelVBO, static_cast<GLsizeiptr>(vertexCount) * vertexSize, vertexData, GL_DYNAMIC_STORAGE_BIT);
 
-    if (keyboard.keyPressed(Keyboard::KEY_BACKSPACE))
-    {
-        switch (g_camera.getBehavior())
-        {
-        default:
-            break;
+  const auto indexCount = g_model.getNumberOfIndices();
+  const auto *indexData = g_model.getIndexBuffer();
 
-        case Camera::CAMERA_BEHAVIOR_FLIGHT:
-            g_camera.undoRoll();
-            break;
+  glCreateBuffers(1, &g_modelEBO);
+  glNamedBufferStorage(g_modelEBO, static_cast<GLsizeiptr>(indexCount) * static_cast<GLsizeiptr>(sizeof(int)), indexData,
+                       GL_DYNAMIC_STORAGE_BIT);
 
-        case Camera::CAMERA_BEHAVIOR_ORBIT:
-            if (!g_camera.preferTargetYAxisOrbiting())
-                g_camera.undoRoll();
-            break;
-        }
-    }
+  constexpr auto PositionID = 0;
+  constexpr auto TexCoordID = 1;
+  constexpr auto NormalID = 2;
 
-    if (keyboard.keyPressed(Keyboard::KEY_SPACE))
-    {
-        if (g_camera.getBehavior() == Camera::CAMERA_BEHAVIOR_ORBIT)
-            g_camera.setPreferTargetYAxisOrbiting(!g_camera.preferTargetYAxisOrbiting());
-    }
+  glBindVertexBuffer(0, g_modelVBO, 0, vertexSize);
 
-    if (keyboard.keyPressed(Keyboard::KEY_1))
-        ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_FIRST_PERSON);
+  glEnableVertexAttribArray(PositionID);
+  glVertexAttribFormat(PositionID, 3, GL_FLOAT, GL_FALSE, offsetof(ModelOBJ::Vertex, position));
+  glVertexAttribBinding(PositionID, 0);
 
-    if (keyboard.keyPressed(Keyboard::KEY_2))
-        ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_SPECTATOR);
+  glEnableVertexAttribArray(TexCoordID);
+  glVertexAttribFormat(TexCoordID, 2, GL_FLOAT, GL_FALSE, offsetof(ModelOBJ::Vertex, texCoord));
+  glVertexAttribBinding(TexCoordID, 0);
 
-    if (keyboard.keyPressed(Keyboard::KEY_3))
-        ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_FLIGHT);
+  glEnableVertexAttribArray(NormalID);
+  glVertexAttribFormat(NormalID, 3, GL_FLOAT, GL_FALSE, offsetof(ModelOBJ::Vertex, normal));
+  glVertexAttribBinding(NormalID, 0);
 
-    if (keyboard.keyPressed(Keyboard::KEY_4))
-        ChangeCameraBehavior(Camera::CAMERA_BEHAVIOR_ORBIT);
-
-    if (keyboard.keyPressed(Keyboard::KEY_H))
-        g_displayHelp = !g_displayHelp;
-
-    if (keyboard.keyPressed(Keyboard::KEY_ADD) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_ADD))
-    {
-        g_camera.setRotationSpeed(g_camera.getRotationSpeed() + 0.01f);
-
-        if (g_camera.getRotationSpeed() > 1.0f)
-            g_camera.setRotationSpeed(1.0f);
-    }     
-
-    if (keyboard.keyPressed(Keyboard::KEY_SUBTRACT) || keyboard.keyPressed(Keyboard::KEY_NUMPAD_SUBTRACT))
-    {
-        g_camera.setRotationSpeed(g_camera.getRotationSpeed() - 0.01f);
-
-        if (g_camera.getRotationSpeed() <= 0.0f)
-            g_camera.setRotationSpeed(0.01f);
-    }
-
-    if (keyboard.keyPressed(Keyboard::KEY_PERIOD))
-    {
-        mouse.setWeightModifier(mouse.weightModifier() + 0.1f);
-
-        if (mouse.weightModifier() > 1.0f)
-            mouse.setWeightModifier(1.0f);
-    }     
-
-    if (keyboard.keyPressed(Keyboard::KEY_COMMA))
-    {
-        mouse.setWeightModifier(mouse.weightModifier() - 0.1f);
-
-        if (mouse.weightModifier() < 0.0f)
-            mouse.setWeightModifier(0.0f);
-    }
-
-    if (keyboard.keyPressed(Keyboard::KEY_M))
-        mouse.smoothMouse(!mouse.isMouseSmoothing());
-
-    if (keyboard.keyPressed(Keyboard::KEY_V))
-        EnableVerticalSync(!g_enableVerticalSync);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_modelEBO);
 }
 
-void RenderFloor()
-{
-    glDisable(GL_LIGHTING);
+inline size_t uboAligned(size_t size) { return ((size + 255) / 256) * 256; }
 
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_floorColorMapTexture);
-
-    glActiveTextureARB(GL_TEXTURE1_ARB);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, g_floorLightMapTexture);
-
-    glCallList(g_floorDisplayList);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
-
-    glActiveTextureARB(GL_TEXTURE0_ARB);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
+void createUniformBuffers() {
+  glCreateBuffers(1, &g_UBO);
+  glNamedBufferStorage(g_UBO, uboAligned(sizeof(glm::mat4)), nullptr, GL_DYNAMIC_STORAGE_BIT);
 }
 
-void RenderFrame()
-{
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
+void createFloorProgram() {
+  constexpr std::string_view VertexShader = R"(
+  #version 460 core
 
-    glViewport(0, 0, g_windowWidth, g_windowHeight);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  layout(location=0) in vec3 aPosition;
+  layout(location=1) in vec2 aUV0;
+  layout(location=2) in vec2 aUV1;
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glMultMatrixf(&g_camera.getProjectionMatrix()[0][0]);
+  layout(std140, binding=0) uniform Matrices
+  {
+      mat4 uMVP;
+  };
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glMultMatrixf(&g_camera.getViewMatrix()[0][0]);
+  out Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } OUT;
 
-    if (g_camera.getBehavior() == Camera::CAMERA_BEHAVIOR_ORBIT)
-    {
-        static float globalAmbient[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-        static float lightPos[4];
+  void main() {
+    OUT.wUV0 = aUV0;
+    OUT.wUV1 = aUV1;
+    gl_Position = uMVP * vec4(aPosition, 1);
+  }
+  )";
+  constexpr std::string_view FragmentShader = R"(
+  #version 460 core
 
-        glEnable(GL_LIGHTING);
-        glEnable(GL_LIGHT0);
+  in Interpolants {
+    vec2 wUV0;
+    vec2 wUV1;
+  } IN;
 
-        lightPos[0] = g_camera.getPosition().x;
-        lightPos[1] = g_camera.getPosition().y;
-        lightPos[2] = g_camera.getPosition().z;
-        lightPos[3] = 1.0f;
+  layout(binding=1) uniform sampler2D uTexture0;
+  layout(binding=2) uniform sampler2D uTexture1;
 
-        glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
-        glLightModelf(GL_LIGHT_MODEL_LOCAL_VIEWER, 1.0f);
+  layout(location=0) out vec4 out_Color;
 
-        RenderModel();
+  void main() {
+    out_Color = texture(uTexture0, IN.wUV0) * texture(uTexture1, IN.wUV1);
+  }
+  )";
 
-        glDisable(GL_LIGHT0);
-        glDisable(GL_LIGHTING);
-    }
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER, VertexShader.data());
+  if(vertexShader == -1)
+    std::exit(EXIT_FAILURE);
 
-    RenderFloor();
-    RenderText();
+  const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());
+  if(fragmentShader == -1)
+    std::exit(EXIT_FAILURE);
+
+  const auto program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(program == -1)
+    std::exit(EXIT_FAILURE);
+
+  glDeleteShader(static_cast<GLuint>(vertexShader));
+  glDeleteShader(static_cast<GLuint>(fragmentShader));
+
+  g_floorProgram = static_cast<GLuint>(program);
+
+  g_uFloorTexture0Location = glGetUniformLocation(g_floorProgram, "uTexture0");
+  g_uFloorTexture1Location = glGetUniformLocation(g_floorProgram, "uTexture1");
 }
 
-void RenderModel()
-{
-    glPushMatrix();
+void createModelProgram() {
+  constexpr std::string_view VertexShader = R"(
+  #version 460 core
 
-    Matrix4 m = g_meshOrientation.toMatrix4();
+  layout(location=0) in vec3 aPosition;
+  layout(location=1) in vec2 aTexCoord;
+  layout(location=2) in vec3 aNormal;
 
-    m[3][0] = g_meshPosition.x;
-    m[3][1] = g_meshPosition.y;
-    m[3][2] = g_meshPosition.z;
+  layout(std140, binding=0) uniform Matrices
+  {
+      mat4 uMVP;
+  };
 
-    glMultMatrixf(&m[0][0]);
+  uniform mat4 uModel;
+  uniform mat3 uNormalMatrix;
 
-    GLuint textureId = 0;
-    const ModelOBJ::Mesh *pMesh = 0;
-    const ModelOBJ::Material *pMaterial = 0;
-    const ModelOBJ::Vertex *pVertices = 0;
+  out Interpolants {
+    vec3 wPosition;
+    vec3 wNormal;
+  } OUT;
 
-    for (int i = 0; i < g_model.getNumberOfMeshes(); ++i)
-    {
-        pMesh = &g_model.getMesh(i);
-        pMaterial = &g_model.getMaterial(pMesh->materialIndex);
-        pVertices = g_model.getVertexBuffer();
+  void main() {
+    OUT.wPosition = vec3(uModel * vec4(aPosition, 1.0));
+    OUT.wNormal = normalize(uNormalMatrix * aNormal);
+    gl_Position = uMVP * vec4(aPosition, 1.0);
+  }
+  )";
+  constexpr std::string_view FragmentShader = R"(
+  #version 460 core
 
-        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, pMaterial->ambient);
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, pMaterial->diffuse);
-        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, pMaterial->specular);
-        glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, pMaterial->shininess * 128.0f);
+  in Interpolants {
+    vec3 wPosition;
+    vec3 wNormal;
+  } IN;
 
-        if ((textureId = g_modelTextures[pMaterial->colorMapFilename]) != 0)
-        {
-            glEnable(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-        }
-        else
-        {
-            glDisable(GL_TEXTURE_2D);
-        }
+  uniform vec3 uLightPos;
+  uniform vec3 uCameraPos;
+  uniform vec4 uMatAmbient;
+  uniform vec4 uMatDiffuse;
+  uniform vec4 uMatSpecular;
+  uniform float uMatShininess;
 
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer(3, GL_FLOAT, g_model.getVertexSize(), pVertices->position);
+  layout(location=0) out vec4 out_Color;
 
-        if (g_model.hasTextureCoords())
-        {
-            glActiveTextureARB(GL_TEXTURE0_ARB);
-            glEnable(GL_TEXTURE_2D);
-            glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-            glTexCoordPointer(2, GL_FLOAT, g_model.getVertexSize(), pVertices->texCoord);
-        }
+  void main() {
+    vec3 N = normalize(IN.wNormal);
+    vec3 L = normalize(uLightPos - IN.wPosition);
+    vec3 V = normalize(uCameraPos - IN.wPosition);
+    vec3 H = normalize(L + V);
 
-        if (g_model.hasVertexNormals())
-        {
-            glEnableClientState(GL_NORMAL_ARRAY);
-            glNormalPointer(GL_FLOAT, g_model.getVertexSize(), pVertices->normal);
-        }
+    vec3 ambient = uMatAmbient.rgb * 0.1;
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 diffuse = uMatDiffuse.rgb * NdotL;
 
-        glDrawElements(GL_TRIANGLES, pMesh->triangleCount * 3,
-            GL_UNSIGNED_INT, g_model.getIndexBuffer() + pMesh->startIndex);
+    float NdotH = max(dot(N, H), 0.0);
+    float spec = (uMatShininess > 0.0) ? pow(NdotH, uMatShininess) : 0.0;
+    vec3 specular = uMatSpecular.rgb * spec;
 
-        if (g_model.hasVertexNormals())
-            glDisableClientState(GL_NORMAL_ARRAY);
+    out_Color = vec4(ambient + diffuse + specular, uMatDiffuse.a);
+  }
+  )";
 
-        if (g_model.hasTextureCoords())
-            glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+  const auto vertexShader = Shaders::createShader(GL_VERTEX_SHADER, VertexShader.data());
+  if(vertexShader == -1)
+    std::exit(EXIT_FAILURE);
 
-        glDisableClientState(GL_VERTEX_ARRAY);
-    }
+  const auto fragmentShader = Shaders::createShader(GL_FRAGMENT_SHADER, FragmentShader.data());
+  if(fragmentShader == -1)
+    std::exit(EXIT_FAILURE);
 
-    glPopMatrix();
+  const auto program = Shaders::createProgram(vertexShader, fragmentShader);
+  if(program == -1)
+    std::exit(EXIT_FAILURE);
+
+  glDeleteShader(static_cast<GLuint>(vertexShader));
+  glDeleteShader(static_cast<GLuint>(fragmentShader));
+
+  g_modelProgram = static_cast<GLuint>(program);
+
+  g_uModelMatrixLocation = glGetUniformLocation(g_modelProgram, "uModel");
+  g_uNormalMatrixLocation = glGetUniformLocation(g_modelProgram, "uNormalMatrix");
+  g_uLightPosLocation = glGetUniformLocation(g_modelProgram, "uLightPos");
+  g_uCameraPosLocation = glGetUniformLocation(g_modelProgram, "uCameraPos");
+  g_uMatAmbientLocation = glGetUniformLocation(g_modelProgram, "uMatAmbient");
+  g_uMatDiffuseLocation = glGetUniformLocation(g_modelProgram, "uMatDiffuse");
+  g_uMatSpecularLocation = glGetUniformLocation(g_modelProgram, "uMatSpecular");
+  g_uMatShininessLocation = glGetUniformLocation(g_modelProgram, "uMatShininess");
 }
 
-void RenderText()
-{
-    std::ostringstream output;
+void Cleanup() {
+  CleanupApp();
 
-    if (g_displayHelp)
-    {
-        output
-            << "Press 1 to switch to first person behavior" << std::endl
-            << "Press 2 to switch to spectator behavior" << std::endl
-            << "Press 3 to switch to flight behavior" << std::endl
-            << "Press 4 to switch to orbit behavior" << std::endl
-            << std::endl
-            << "First Person and Spectator behaviors" << std::endl
-            << "  Press W and S to move forwards and backwards" << std::endl
-            << "  Press A and D to strafe left and right" << std::endl
-            << "  Press E and Q to move up and down" << std::endl
-            << "  Move mouse to free look" << std::endl
-            << std::endl
-            << "Flight behavior" << std::endl
-            << "  Press W and S to move forwards and backwards" << std::endl
-            << "  Press A and D to yaw left and right" << std::endl
-            << "  Press E and Q to move up and down" << std::endl
-            << "  Move mouse up and down to change pitch" << std::endl
-            << "  Move mouse left and right to change roll" << std::endl
-            << std::endl
-            << "Orbit behavior" << std::endl
-            << "  Press SPACE to enable/disable target Y axis orbiting" << std::endl
-            << "  Move mouse to orbit the model" << std::endl
-            << "  Mouse wheel to zoom in and out" << std::endl
-            << std::endl
-            << "Press M to enable/disable mouse smoothing" << std::endl
-            << "Press V to enable/disable vertical sync" << std::endl
-            << "Press + and - to change camera rotation speed" << std::endl
-            << "Press , and . to change mouse sensitivity" << std::endl
-            << "Press BACKSPACE or middle mouse button to level camera" << std::endl
-            << "Press ALT and ENTER to toggle full screen" << std::endl
-            << "Press ESC to exit" << std::endl
-            << std::endl
-            << "Press H to hide help";
-    }
-    else
-    {
-        const char *pszCurrentBehavior = 0;
-        const char *pszOrbitStyle = 0;
-        const Mouse &mouse = Mouse::instance();
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL2_Shutdown();
+  ImGui::DestroyContext();
 
-        switch (g_camera.getBehavior())
-        {
-        case Camera::CAMERA_BEHAVIOR_FIRST_PERSON:
-            pszCurrentBehavior = "First Person";
-            break;
+  if(nullptr != g_glcontext) {
+    SDL_GL_DeleteContext(g_glcontext);
+    g_glcontext = nullptr;
+  }
 
-        case Camera::CAMERA_BEHAVIOR_SPECTATOR:
-            pszCurrentBehavior = "Spectator";
-            break;
-
-        case Camera::CAMERA_BEHAVIOR_FLIGHT:
-            pszCurrentBehavior = "Flight";
-            break;
-
-        case Camera::CAMERA_BEHAVIOR_ORBIT:
-            pszCurrentBehavior = "Orbit";
-            break;
-
-        default:
-            pszCurrentBehavior = "Unknown";
-            break;
-        }
-
-        if (g_camera.preferTargetYAxisOrbiting())
-            pszOrbitStyle = "Target Y axis";
-        else
-            pszOrbitStyle = "Free";
-
-        output.setf(std::ios::fixed, std::ios::floatfield);
-        output << std::setprecision(2);
-
-        output
-            << "FPS: " << g_framesPerSecond << std::endl
-            << "Multisample anti-aliasing: " << g_msaaSamples << "x" << std::endl
-            << "Anisotropic filtering: " << g_maxAnisotrophy << "x" << std::endl
-            << "Vertical sync: " << (g_enableVerticalSync ? "enabled" : "disabled") << std::endl
-            << std::endl
-            << "Camera" << std::endl
-            << "  Position:"
-            << " x:" << g_camera.getPosition().x
-            << " y:" << g_camera.getPosition().y
-            << " z:" << g_camera.getPosition().z << std::endl
-            << "  Velocity:"
-            << " x:" << g_camera.getCurrentVelocity().x
-            << " y:" << g_camera.getCurrentVelocity().y
-            << " z:" << g_camera.getCurrentVelocity().z << std::endl
-            << "  Behavior: " << pszCurrentBehavior << std::endl
-            << "  Rotation speed: " << g_camera.getRotationSpeed() << std::endl
-            << "  Orbit style: " << pszOrbitStyle << std::endl
-            << std::endl
-            << "Mouse" << std::endl
-            << "  Smoothing: " << (mouse.isMouseSmoothing() ? "enabled" : "disabled") << std::endl
-            << "  Sensitivity: " << mouse.weightModifier() << std::endl
-            << std::endl
-            << "Press H to display help";
-    }
-
-    g_font.begin();
-    g_font.setColor(1.0f, 1.0f, 0.0f);
-    g_font.drawText(1, 1, output.str().c_str());
-    g_font.end();
+  if(nullptr != g_pWindow) {
+    SDL_DestroyWindow(g_pWindow);
+    g_pWindow = nullptr;
+  }
 }
 
-void SetProcessorAffinity()
-{
-    // Assign the current thread to one processor. This ensures that timing
-    // code runs on only one processor, and will not suffer any ill effects
-    // from power management.
-    //
-    // Based on the DXUTSetProcessorAffinity() function in the DXUT framework.
+void CleanupApp() {
+  if(g_floorColorMapTexture) {
+    glDeleteTextures(1, &g_floorColorMapTexture);
+    g_floorColorMapTexture = 0;
+  }
 
-    DWORD_PTR dwProcessAffinityMask = 0;
-    DWORD_PTR dwSystemAffinityMask = 0;
-    HANDLE hCurrentProcess = GetCurrentProcess();
+  if(g_floorLightMapTexture) {
+    glDeleteTextures(1, &g_floorLightMapTexture);
+    g_floorLightMapTexture = 0;
+  }
 
-    if (!GetProcessAffinityMask(hCurrentProcess, &dwProcessAffinityMask, &dwSystemAffinityMask))
-        return;
+  if(g_floorVAO) {
+    glDeleteVertexArrays(1, &g_floorVAO);
+    g_floorVAO = 0;
+  }
+  if(g_floorVBO) {
+    glDeleteBuffers(1, &g_floorVBO);
+    g_floorVBO = 0;
+  }
+  if(g_floorEBO) {
+    glDeleteBuffers(1, &g_floorEBO);
+    g_floorEBO = 0;
+  }
+  if(g_UBO) {
+    glDeleteBuffers(1, &g_UBO);
+    g_UBO = 0;
+  }
+  if(g_floorProgram) {
+    glDeleteProgram(g_floorProgram);
+    g_floorProgram = 0;
+  }
 
-    if (dwProcessAffinityMask)
-    {
-        // Find the lowest processor that our process is allowed to run against.
-
-        DWORD_PTR dwAffinityMask = (dwProcessAffinityMask & ((~dwProcessAffinityMask) + 1));
-
-        // Set this as the processor that our thread must always run against.
-        // This must be a subset of the process affinity mask.
-
-        HANDLE hCurrentThread = GetCurrentThread();
-
-        if (hCurrentThread != INVALID_HANDLE_VALUE)
-        {
-            SetThreadAffinityMask(hCurrentThread, dwAffinityMask);
-            CloseHandle(hCurrentThread);
-        }
-    }
-
-    CloseHandle(hCurrentProcess);
-}
-
-void ToggleFullScreen()
-{
-    static DWORD savedExStyle;
-    static DWORD savedStyle;
-    static RECT rcSaved;
-
-    g_isFullScreen = !g_isFullScreen;
-
-    if (g_isFullScreen)
-    {
-        // Moving to full screen mode.
-
-        savedExStyle = GetWindowLong(g_hWnd, GWL_EXSTYLE);
-        savedStyle = GetWindowLong(g_hWnd, GWL_STYLE);
-        GetWindowRect(g_hWnd, &rcSaved);
-
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, 0);
-        SetWindowLong(g_hWnd, GWL_STYLE, WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-        SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-
-        g_windowWidth = GetSystemMetrics(SM_CXSCREEN);
-        g_windowHeight = GetSystemMetrics(SM_CYSCREEN);
-
-        SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0,
-            g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    }
-    else
-    {
-        // Moving back to windowed mode.
-
-        SetWindowLong(g_hWnd, GWL_EXSTYLE, savedExStyle);
-        SetWindowLong(g_hWnd, GWL_STYLE, savedStyle);
-        SetWindowPos(g_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-
-        g_windowWidth = rcSaved.right - rcSaved.left;
-        g_windowHeight = rcSaved.bottom - rcSaved.top;
-
-        SetWindowPos(g_hWnd, HWND_NOTOPMOST, rcSaved.left, rcSaved.top,
-            g_windowWidth, g_windowHeight, SWP_SHOWWINDOW);
-    }
-
-    g_camera.perspective(CAMERA_FOVX,
-        static_cast<float>(g_windowWidth) / static_cast<float>(g_windowHeight),
-        CAMERA_ZNEAR, CAMERA_ZFAR);
-}
-
-void UpdateCamera(float elapsedTimeSec)
-{
-    float dx = 0.0f;
-    float dy = 0.0f;
-    float dz = 0.0f;
-    Vector3 direction;
-    Mouse &mouse = Mouse::instance();
-
-    GetMovementDirection(direction);
-
-    switch (g_camera.getBehavior())
-    {
-    default:
-        break;
-
-    case Camera::CAMERA_BEHAVIOR_FIRST_PERSON:
-    case Camera::CAMERA_BEHAVIOR_SPECTATOR:
-        dx = -mouse.xPosRelative();
-        dy = -mouse.yPosRelative();
-
-        g_camera.rotateSmoothly(dx, dy, 0.0f);
-        g_camera.updatePosition(direction, elapsedTimeSec);
-        break;
-
-    case Camera::CAMERA_BEHAVIOR_FLIGHT:
-        dy = mouse.yPosRelative();
-        dz = -mouse.xPosRelative();
-
-        g_camera.rotateSmoothly(0.0f, dy, dz);
-
-        if ((dx = -direction.x * CAMERA_SPEED_FLIGHT_YAW * elapsedTimeSec) != 0.0f)
-            g_camera.rotate(dx, 0.0f, 0.0f);
-
-        direction.x = 0.0f; // ignore yaw motion when updating camera's velocity
-        g_camera.updatePosition(direction, elapsedTimeSec);
-        break;
-
-    case Camera::CAMERA_BEHAVIOR_ORBIT:
-        dx = mouse.xPosRelative();
-        dy = mouse.yPosRelative();
-
-        g_camera.rotateSmoothly(dx, dy, 0.0f);
-
-        if (!g_camera.preferTargetYAxisOrbiting())
-        {
-            if ((dz = direction.x * CAMERA_SPEED_ORBIT_ROLL * elapsedTimeSec) != 0.0f)
-                g_camera.rotate(0.0f, 0.0f, dz);
-        }
-
-        if ((dz = -mouse.wheelPos()) != 0.0f)
-            g_camera.zoom(dz, g_camera.getOrbitMinZoom(), g_camera.getOrbitMaxZoom());
-
-        break;
-    }
-
-    mouse.setPosition(g_windowWidth / 2, g_windowHeight / 2);
-
-    if (mouse.buttonPressed(Mouse::BUTTON_MIDDLE))
-        g_camera.undoRoll();
-
-    PerformCameraCollisionDetection();
-}
-
-void UpdateFrame(float elapsedTimeSec)
-{
-    UpdateFrameRate(elapsedTimeSec);
-
-    Mouse::instance().update();
-    Keyboard::instance().update();
-
-    UpdateCamera(elapsedTimeSec);
-    ProcessUserInput();
-}
-
-void UpdateFrameRate(float elapsedTimeSec)
-{
-    static float accumTimeSec = 0.0f;
-    static int frames = 0;
-
-    accumTimeSec += elapsedTimeSec;
-
-    if (accumTimeSec > 1.0f)
-    {
-        g_framesPerSecond = frames;
-
-        frames = 0;
-        accumTimeSec = 0.0f;
-    }
-    else
-    {
-        ++frames;
-    }
+  if(g_modelVAO) {
+    glDeleteVertexArrays(1, &g_modelVAO);
+    g_modelVAO = 0;
+  }
+  if(g_modelVBO) {
+    glDeleteBuffers(1, &g_modelVBO);
+    g_modelVBO = 0;
+  }
+  if(g_modelEBO) {
+    glDeleteBuffers(1, &g_modelEBO);
+    g_modelEBO = 0;
+  }
+  if(g_modelProgram) {
+    glDeleteProgram(g_modelProgram);
+    g_modelProgram = 0;
+  }
 }

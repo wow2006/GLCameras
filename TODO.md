@@ -70,6 +70,25 @@ GLCamera2
 GLCamera3
 ---------
 
+- [x] Adding `GLCamera3` to cmake.
+- [x] Delete legacy files (mathlib, bitmap, gl_font, input, GL_ARB_multitexture, WGL_ARB_multisample).
+- [x] Replace `mathlib` with glm. `NOTE: quaternion multiply order is reversed vs mathlib`
+- [x] Replace `bitmap` with stb.
+- [x] Replace `gl_font` with ImGui.
+- [x] Remove Multisample (WGL_ARB_multisample → SDL2 attributes).
+- [x] Remove Multitexture (GL_ARB_multitexture → core GL).
+- [x] Adding Support for glbinding.
+- [x] Port OpenGL 1.0 to OpenGL 4.6.
+- [x] Use DSA for OpenGL Functions.
+- [x] Replace Default Uniform buffer with UBO.
+- [x] Adding Imgui support.
+- [x] Port win32 to SDL2.
+- [x] Port camera with 4 behaviors (first person, spectator, flight, orbit).
+- [x] Port model rendering (Blinn-Phong shader, per-mesh materials).
+- [x] Provide bigship1.obj model file.
+- [ ] Missing ToggleFullscreen.
+- [ ] Missing `{Keyboard,Mouse}::handleMsg` in Input header.
+
 GLThirdPersonCamera1
 --------------------
 
