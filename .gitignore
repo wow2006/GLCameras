@@ -74,7 +74,10 @@ StyleCopReport.xml
 *_h.h
 *.ilk
 *.meta
-*.obj
+# NOTE: *.obj was dropped here (kept only via the [Oo]bj/ build-directory rule
+# above) because this repo also stores Wavefront .obj models under */content/
+# and */data/ as source assets, and the extension-based rule silently excluded
+# them from tracking.
 *.iobj
 *.pch
 *.pdb
