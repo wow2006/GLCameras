@@ -6,7 +6,7 @@ add_executable(
   # WIN32
 )
 
-target_sources(GLCamera3 PRIVATE camera.cpp main.cpp model_obj.cpp)
+target_sources(GLCamera3 PRIVATE camera.cpp main.cpp)
 
 target_link_libraries(
   GLCamera3
