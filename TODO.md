@@ -140,5 +140,67 @@ GLThirdPersonCamera2
 OrbitCamera
 -----------
 
+- [x] Adding `OrbitCamera` to cmake.
+- [x] Delete legacy files (mathlib, Tga, ObjModel, BitmapFont, glExtension, Win32
+      MVC: Window/DialogWindow/Controller*/View*/procedure/Log/wcharUtil, `.rc`).
+- [x] Replace `mathlib` with glm. `NOTE: mathlib's Matrix4 m[i] is glm's`
+      `matrix[i / 4][i % 4], so every index expression carries over verbatim.`
+- [x] Replace `ObjModel` with the shared `ModelOBJ` loader in `utilities`.
+- [x] Adding Support for glbinding.
+- [x] Port OpenGL 1.0 to OpenGL 4.6 (Blinn-Phong replaces the fixed function
+      light, the `gl_ARB_shader_objects`/`ARB_vertex_buffer_object` paths and
+      the `glExtension` probing are gone).
+- [x] Use DSA for OpenGL Functions.
+- [x] Replace Default Uniform buffer with UBO.
+- [x] Adding Imgui support.
+- [x] Replace `BitmapFont` with ImGui.
+- [x] Port the two child GL windows to two `glViewport`/`glScissor` viewports.
+- [x] Port the modeless control dialog to an ImGui panel (angles, position,
+      target, FOV, grid/FOV toggles, reset, live matrix + quaternion readout).
+- [x] Port win32 to SDL2.
+- [x] Add to the CI clang-format sweep.
+- [x] Provide `data/debugger_small_5k.obj` and `data/camera.obj`.
+- [ ] Missing ToggleFullscreen.
+- [ ] Missing `{Keyboard,Mouse}::handleMsg` in Input header.
+
+Two deliberate deviations from the original, both noted in the source:
+
+- `setRotation(angle)` handed raw degrees to `Quaternion::getQuaternion()`,
+  which wanted half angles in radians, so the quaternion the dialog printed
+  after a slider move was meaningless. It now uses the same conversion
+  `lookAt()` already did. The quaternion is read-only for the demo, so nothing
+  else moves.
+- The FOV slider stays live when the FOV checkbox is cleared. The checkbox only
+  hides the cone, but the same value also drives the Point of View projection.
+
 Trackball
 ---------
+
+- [x] Adding `Trackball` to cmake.
+- [x] Delete legacy files (mathlib, animUtils, Primitives, GLUT).
+- [x] Replace `mathlib` with glm. `NOTE: mathlib's quaternion product is the`
+      `standard Hamilton product here, so "delta * prevQuat" keeps its order;`
+      `only Quaternion(axis, angle) differs, taking a half angle where`
+      `glm::angleAxis() takes the full one.`
+- [x] Adding Support for glbinding.
+- [x] Port OpenGL 1.0 to OpenGL 4.6.
+- [x] Use DSA for OpenGL Functions.
+- [x] Replace Default Uniform buffer with UBO.
+- [x] Adding Imgui support.
+- [x] Replace the GLUT bitmap font with ImGui.
+- [x] Replace `gluSphere` with a generated UV sphere mesh (poles on z, as GLU
+      had them).
+- [x] Port GLUT to SDL2.
+- [x] Port the `Trackball` class (ARC and PROJECT cursor-to-sphere mapping).
+- [x] Add to the CI clang-format sweep.
+- [x] Replace the placeholder wire object with `data/debugger_small_5k.obj`,
+      the same OBJ `OrbitCamera` uses, via the shared `ModelOBJ` loader.
+      `NOTE: the original drew glutWireTeapot(). GLUT is gone and the Newell`
+      `patch data is not in this repository, and the debugger model is what's`
+      `available; the demo falls back to a generated wire torus if the OBJ is`
+      `absent, which is just as obviously asymmetric under rotation — the only`
+      `job the teapot had.`
+- [ ] Missing ToggleFullscreen.
+- [ ] Missing `{Keyboard,Mouse}::handleMsg` in Input header.
+- [ ] `glLineWidth` above 1.0 is not guaranteed in a core profile, so the mouse
+      path and the axis may come out thinner than the original.

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Adding `OrbitCamera` to cmake, ported to SDL2, OpenGL 4.6 and glm.
+- Adding `Trackball` to cmake, ported to SDL2, OpenGL 4.6 and glm.
 - Adding a root `CMakeLists.txt`.
 - Adding clang-format.
 - Adding clang-tidy.
@@ -25,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `mathlib` with glm.
 - Port OpenGL 1.0 to OpenGL 4.6
 - Replace OpenGL 3.3 functions with DSA.
+- Share the `ModelOBJ` loader between `GLCamera3` and `OrbitCamera` via
+  `utilities`.
+- Replace `OrbitCamera`'s Win32 MVC shell with two GL viewports and an ImGui
+  control panel.
+- Replace `Trackball`'s GLUT shell with SDL2 and ImGui.
 
 ### Removed
 - Remove VC++ files.
