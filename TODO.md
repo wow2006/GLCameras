@@ -204,3 +204,20 @@ Trackball
 - [ ] Missing `{Keyboard,Mouse}::handleMsg` in Input header.
 - [ ] `glLineWidth` above 1.0 is not guaranteed in a core profile, so the mouse
       path and the axis may come out thinner than the original.
+
+MayaCamera
+----------
+
+- [x] Adding `MayaCamera` to cmake.
+- [x] `MayaCamera` class: tumble, track, dolly, frame, orthographic bookmarks,
+      tumble pivot modes and view undo/redo, in glm only (no GL, no SDL).
+- [x] Two viewport demo, reusing `OrbitCamera`'s scene, grid, `ModelOBJ` models
+      and ImGui panel layout.
+- [x] Draw the orthographic view volume as a prism when the demo camera is
+      orthographic, instead of the perspective FOV cone.
+- [x] `--self-test` flag running `mayaCameraSelfTest()` headless.
+- [ ] Missing ToggleFullscreen (shared with the other demos).
+- [ ] Tumbling over a pole flips the image, as Maya does; the observer camera in
+      the left viewport is clamped to +/-89 instead.
+- [ ] `setTumblePivot()` re-derives the view from the new pivot, which collapses
+      an over-the-pole orientation back into |pitch| <= 90.

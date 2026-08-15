@@ -10,3 +10,4 @@ It help me to Understand virtual camera more.
 2. Thirdperson camera.
 3. OrbitCamera.
 4. Trackball.
+5. MayaCamera.

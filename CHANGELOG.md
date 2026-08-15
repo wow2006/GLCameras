@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Adding `MayaCamera`, an Autodesk Maya style viewport camera (tumble, track,
+  dolly, frame, orthographic bookmarks and view undo/redo) with a two viewport
+  demo and a `--self-test` flag.
 - Adding `OrbitCamera` to cmake, ported to SDL2, OpenGL 4.6 and glm.
 - Adding `Trackball` to cmake, ported to SDL2, OpenGL 4.6 and glm.
 - Adding a root `CMakeLists.txt`.
